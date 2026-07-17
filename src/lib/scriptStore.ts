@@ -13,10 +13,23 @@ const STORAGE_KEY = 'prompter.scripts.v1'
 // so a deletion made offline doesn't get resurrected by the remote copy.
 const TOMBSTONE_KEY = 'prompter.deleted.v1'
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export function loadScripts(): Script[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as Script[]) : []
+    const scripts = raw ? (JSON.parse(raw) as Script[]) : []
+    // The cloud id column is uuid-typed; heal any script whose id isn't one
+    // (e.g. seeded test data) so sync doesn't reject the whole batch.
+    let migrated = false
+    for (const s of scripts) {
+      if (!UUID_RE.test(s.id)) {
+        s.id = crypto.randomUUID()
+        migrated = true
+      }
+    }
+    if (migrated) saveScripts(scripts)
+    return scripts
   } catch {
     return []
   }
@@ -84,7 +97,7 @@ export async function pushDeletion(id: string) {
 export async function fullSync(local: Script[]): Promise<Script[]> {
   if (!supabase) return local
 
-  const tombstones = loadTombstones()
+  const tombstones = loadTombstones().filter((id) => UUID_RE.test(id))
   if (tombstones.length > 0) {
     const { error } = await supabase.from('scripts').delete().in('id', tombstones)
     if (error) throw new Error(error.message)
