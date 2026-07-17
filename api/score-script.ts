@@ -38,14 +38,20 @@ const RESULT_SCHEMA = {
     },
     rewrite_hook: {
       type: 'string',
-      description: "A rewritten, stronger version of the opening line in the creator's voice",
+      description: "A rewritten, stronger version of the hook in the creator's voice. Keep it under 30 words.",
+    },
+    rewrite_body: {
+      type: 'string',
+      description: "A rewritten version of the rest of the script, preserving the creator's voice and the same core message. Return only the spoken lines, not stage directions or labels.",
     },
   },
-} as const
+}
 
 const SYSTEM_PROMPT = `You are a short-form video script coach. Creators paste teleprompter scripts for TikTok, Reels, and Shorts; you score them and give concrete, actionable feedback.
 
-Judge for the medium: the first 1-2 seconds decide whether viewers scroll past, spoken language beats written language, one idea per video, and the ending should tell the viewer what to do next. Be honest — a mediocre script should score 4-6, not 8. Suggestions must be specific to this script (quote or reference its actual lines), never generic advice.`
+Judge for the medium: the first 1-2 seconds decide whether viewers scroll past, spoken language beats written language, one idea per video, and the ending should tell the viewer what to do next. Be honest — a mediocre script should score 4-6, not 8. Suggestions must be specific to this script (quote or reference its actual lines), never generic advice.
+
+If the user provides a separate hook and body, score the hook separately from the body and use them together as the full script when judging clarity, pacing, and overall. When rewriting, return a stronger hook AND a rewritten body that keeps the creator's voice and message.`
 
 export default async function handler(
   req: { method?: string; body?: { title?: unknown; body?: unknown } },
@@ -67,12 +73,14 @@ export default async function handler(
   }
 
   const title = typeof req.body?.title === 'string' ? req.body.title : ''
+  const hook = typeof req.body?.hook === 'string' ? req.body.hook.trim() : ''
   const body = typeof req.body?.body === 'string' ? req.body.body.trim() : ''
-  if (!body) {
+  const fullScript = hook ? `${hook}\n\n${body}` : body
+  if (!fullScript) {
     res.status(400).json({ error: 'Script body is required.' })
     return
   }
-  if (body.length > MAX_SCRIPT_CHARS) {
+  if (fullScript.length > MAX_SCRIPT_CHARS) {
     res.status(400).json({ error: `Script is too long to score (max ${MAX_SCRIPT_CHARS} characters).` })
     return
   }
@@ -88,7 +96,7 @@ export default async function handler(
       messages: [
         {
           role: 'user',
-          content: `Score this short-form video script.\n\nTitle: ${title || '(untitled)'}\n\nScript:\n${body}`,
+          content: `Score this short-form video script.\n\nTitle: ${title || '(untitled)'}\n\n${hook ? `Hook:\n${hook}\n\nBody:\n${body}` : `Script:\n${body}`}`,
         },
       ],
     })

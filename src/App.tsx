@@ -61,6 +61,7 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null)
 
   const [title, setTitle] = useState('')
+  const [hook, setHook] = useState('')
   const [body, setBody] = useState('')
 
   const activeScript = scripts.find((s) => s.id === activeScriptId) || null
@@ -84,6 +85,7 @@ export default function App() {
 
   function createScript() {
     setTitle('')
+    setHook('')
     setBody('')
     setActiveScriptId(null)
     setView('edit')
@@ -91,6 +93,7 @@ export default function App() {
 
   function editScript(script: Script) {
     setTitle(script.title)
+    setHook(script.hook)
     setBody(script.body)
     setActiveScriptId(script.id)
     setView('edit')
@@ -98,6 +101,7 @@ export default function App() {
 
   function saveScript() {
     const trimmedTitle = title.trim() || 'Untitled script'
+    const trimmedHook = hook.trim()
     const trimmedBody = body.trim()
     if (!trimmedBody) return
 
@@ -105,12 +109,13 @@ export default function App() {
     let nextScripts: Script[]
     if (activeScript) {
       nextScripts = scripts.map((s) =>
-        s.id === activeScript.id ? { ...s, title: trimmedTitle, body: trimmedBody, updatedAt: now } : s,
+        s.id === activeScript.id ? { ...s, title: trimmedTitle, hook: trimmedHook, body: trimmedBody, updatedAt: now } : s,
       )
     } else {
       const newScript: Script = {
         id: crypto.randomUUID(),
         title: trimmedTitle,
+        hook: trimmedHook,
         body: trimmedBody,
         createdAt: now,
         updatedAt: now,
@@ -173,9 +178,11 @@ export default function App() {
       {view === 'edit' && (
         <EditScriptView
           title={title}
+          hook={hook}
           body={body}
           isNew={!activeScript}
           onTitleChange={setTitle}
+          onHookChange={setHook}
           onBodyChange={setBody}
           onSave={saveScript}
           onCancel={() => setView('list')}
@@ -344,7 +351,8 @@ function ScriptListView({
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold">{script.title}</p>
                 <p className="truncate text-sm text-zinc-400">
-                  {script.body.slice(0, 60).replace(/\n/g, ' ')}
+                  {script.hook || script.body.slice(0, 60).replace(/\n/g, ' ')}
+                  {((script.hook?.length && script.hook.length > 60) || script.body.length > 60) && '…'}
                 </p>
               </div>
               <div className="ml-3 flex items-center gap-2">
@@ -621,21 +629,26 @@ interface ScriptScore {
   strengths: string[]
   suggestions: string[]
   rewrite_hook: string
+  rewrite_body: string
 }
 
 function EditScriptView({
   title,
+  hook,
   body,
   isNew,
   onTitleChange,
+  onHookChange,
   onBodyChange,
   onSave,
   onCancel,
 }: {
   title: string
+  hook: string
   body: string
   isNew: boolean
   onTitleChange: (v: string) => void
+  onHookChange: (v: string) => void
   onBodyChange: (v: string) => void
   onSave: () => void
   onCancel: () => void
@@ -656,7 +669,7 @@ function EditScriptView({
       const resp = await fetch('/api/score-script', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, body }),
+        body: JSON.stringify({ title, hook, body }),
       })
       if (!resp.ok) {
         let message = 'Scoring failed. Try again.'
@@ -677,6 +690,13 @@ function EditScriptView({
     }
   }
 
+  async function applyRewrite() {
+    if (!score) return
+    onHookChange(score.rewrite_hook)
+    onBodyChange(score.rewrite_body)
+    setScore(null)
+  }
+
   return (
     <div className="flex h-full flex-col bg-zinc-950 p-4 pt-12">
       <div className="mb-4 flex items-center justify-between">
@@ -687,13 +707,20 @@ function EditScriptView({
       </div>
       <input
         type="text"
-        placeholder="Script title"
+        placeholder="Script title (only you see this)"
         value={title}
         onChange={(e) => onTitleChange(e.target.value)}
         className="mb-3 rounded-xl bg-zinc-900 px-4 py-3 text-lg font-semibold placeholder-zinc-500 outline-none"
       />
+      <input
+        type="text"
+        placeholder="Hook — the opening line that stops the scroll"
+        value={hook}
+        onChange={(e) => onHookChange(e.target.value)}
+        className="mb-3 rounded-xl border border-amber-500/30 bg-zinc-900 px-4 py-3 text-lg font-semibold text-amber-100 placeholder-amber-500/50 outline-none"
+      />
       <textarea
-        placeholder="Paste your script here..."
+        placeholder="Paste the rest of your script here..."
         value={body}
         onChange={(e) => onBodyChange(e.target.value)}
         className="flex-1 resize-none rounded-xl bg-zinc-900 p-4 text-base leading-relaxed placeholder-zinc-500 outline-none"
@@ -757,10 +784,22 @@ function EditScriptView({
               </ul>
             </div>
           )}
-          {score.rewrite_hook && (
-            <div>
-              <p className="text-xs font-semibold text-sky-400">Stronger opening line</p>
-              <p className="text-sm italic text-zinc-300">“{score.rewrite_hook}”</p>
+          {(score.rewrite_hook || score.rewrite_body) && (
+            <div className="mb-2">
+              <p className="text-xs font-semibold text-sky-400">AI rewrite</p>
+              {score.rewrite_hook && (
+                <p className="mb-1 text-sm italic text-zinc-300">“{score.rewrite_hook}”</p>
+              )}
+              {score.rewrite_body && score.rewrite_body !== body && (
+                <p className="text-sm text-zinc-400">Body rewritten. Tap Apply to preview.</p>
+              )}
+              <button
+                type="button"
+                onClick={applyRewrite}
+                className="mt-2 w-full rounded-full bg-sky-500 py-2 text-sm font-semibold text-white active:scale-95"
+              >
+                Apply rewrite
+              </button>
             </div>
           )}
         </div>
@@ -865,7 +904,10 @@ function PromptView({
   const pausedAtRef = useRef<number | null>(null)
   const totalPausedMsRef = useRef(0)
 
-  const chunks = useMemo(() => splitIntoChunks(script.body), [script.body])
+  const chunks = useMemo(() => {
+    const all = [script.hook, ...splitIntoChunks(script.body)].filter(Boolean)
+    return all
+  }, [script.hook, script.body])
   const [chunkIndex, setChunkIndex] = useState(0)
 
   async function startCamera() {
@@ -1192,15 +1234,15 @@ function PromptView({
         }}
       >
         {settings.focusMode ? (
-        <p
-          className="w-full whitespace-pre-wrap px-4 text-center font-semibold text-white drop-shadow-lg"
-          style={{
-            fontSize: settings.fontSize,
-            lineHeight: settings.lineHeight,
-          }}
-        >
-          {chunks[chunkIndex]}
-        </p>
+          <p
+            className={`w-full whitespace-pre-wrap px-4 text-center font-semibold drop-shadow-lg ${chunkIndex === 0 ? 'text-amber-300' : 'text-white'}`}
+            style={{
+              fontSize: settings.fontSize,
+              lineHeight: settings.lineHeight,
+            }}
+          >
+            {chunks[chunkIndex]}
+          </p>
         ) : (
           <p
             className="whitespace-pre-wrap text-center font-semibold text-white drop-shadow-lg"
@@ -1209,6 +1251,10 @@ function PromptView({
               lineHeight: settings.lineHeight,
             }}
           >
+            {script.hook && (
+              <span className="block text-amber-300">{script.hook}</span>
+            )}
+            {script.hook && script.body && <br />}
             {script.body}
           </p>
         )}

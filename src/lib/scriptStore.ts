@@ -3,12 +3,13 @@ import { supabase } from './supabase'
 export interface Script {
   id: string
   title: string
+  hook: string
   body: string
   createdAt: number
   updatedAt: number
 }
 
-const STORAGE_KEY = 'prompter.scripts.v1'
+const STORAGE_KEY = 'prompter.scripts.v2'
 // Ids deleted locally but possibly still in the cloud; applied on next full sync
 // so a deletion made offline doesn't get resurrected by the remote copy.
 const TOMBSTONE_KEY = 'prompter.deleted.v1'
@@ -39,7 +40,7 @@ export function seedDemoScriptIfFirstRun() {
   if (existing.length > 0) return
   const now = Date.now()
   saveScripts([
-    { id: crypto.randomUUID(), title: DEMO_TITLE, body: DEMO_BODY, createdAt: now, updatedAt: now },
+    { id: crypto.randomUUID(), title: DEMO_TITLE, hook: '', body: DEMO_BODY, createdAt: now, updatedAt: now },
   ])
 }
 
@@ -87,17 +88,18 @@ export function addTombstone(id: string) {
 interface ScriptRow {
   id: string
   title: string
+  hook: string
   body: string
   created_at: number
   updated_at: number
 }
 
 function toRow(s: Script): ScriptRow {
-  return { id: s.id, title: s.title, body: s.body, created_at: s.createdAt, updated_at: s.updatedAt }
+  return { id: s.id, title: s.title, hook: s.hook, body: s.body, created_at: s.createdAt, updated_at: s.updatedAt }
 }
 
 function fromRow(r: ScriptRow): Script {
-  return { id: r.id, title: r.title, body: r.body, createdAt: r.created_at, updatedAt: r.updated_at }
+  return { id: r.id, title: r.title, hook: r.hook || '', body: r.body, createdAt: r.created_at, updatedAt: r.updated_at }
 }
 
 // Best-effort write-through: called after every local save while signed in.
