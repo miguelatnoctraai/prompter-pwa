@@ -4,6 +4,18 @@ Last updated: 2026-07-17
 
 ## ✅ Shipped
 
+- **Screen wake lock**
+  - Screen stays awake while in the prompter view (`navigator.wakeLock`, iOS Safari 16.4+).
+  - Re-acquires the lock when returning to the app after backgrounding.
+
+- **Focus band**
+  - Text fades out away from the eye-level line so the reader's gaze stays near the camera.
+  - Toggleable in prompter controls; on by default.
+
+- **Bluetooth clicker / keyboard controls**
+  - Cheap Bluetooth camera remotes and page-turner clickers pair as keyboards.
+  - Space / Enter / → / PageDown: play–pause. ↑ / ← / PageUp: jump back. ↓: jump forward.
+
 - **Script list + localStorage persistence**
   - Create, edit, delete, and title scripts.
   - All data stored in `localStorage`.
@@ -71,7 +83,7 @@ Last updated: 2026-07-17
 ### 3. Remote control
 **Idea:** Use a second phone or a Bluetooth controller to pause/play/scroll while filming.
 
-**Decision:** Deferred. Could be built later via WebRTC or a simple pairing code.
+**Decision:** Bluetooth clicker support shipped via keyboard events (see Shipped). Second-phone remote via WebRTC/pairing code remains deferred.
 
 ### 4. Speed presets
 **Idea:** Slow / Normal / Fast one-tap speed buttons.

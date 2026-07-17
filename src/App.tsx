@@ -16,6 +16,7 @@ interface Settings {
   speed: number
   mirror: boolean
   margin: number
+  focusBand: boolean
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -24,7 +25,13 @@ const DEFAULT_SETTINGS: Settings = {
   speed: 50,
   mirror: false,
   margin: 16,
+  focusBand: true,
 }
+
+// Fades text away from the eye-level line (~45vh, where scrolling text enters)
+// so the reader's gaze stays anchored near the camera.
+const FOCUS_BAND_MASK =
+  'linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.2) 28%, rgba(0,0,0,1) 40%, rgba(0,0,0,1) 56%, rgba(0,0,0,0.2) 72%, rgba(0,0,0,0.2) 100%)'
 
 function loadScripts(): Script[] {
   try {
@@ -429,6 +436,71 @@ function PromptView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facingMode])
 
+  // Keep the screen awake while prompting. iOS releases the lock whenever the
+  // page is backgrounded, so re-request it on return.
+  useEffect(() => {
+    let lock: WakeLockSentinel | null = null
+
+    async function acquire() {
+      if (!('wakeLock' in navigator)) return
+      try {
+        lock = await navigator.wakeLock.request('screen')
+      } catch {
+        // Ignore: low battery mode or unsupported — screen just dims as usual.
+      }
+    }
+
+    void acquire()
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void acquire()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      lock?.release().catch(() => {})
+    }
+  }, [])
+
+  // Bluetooth clickers and page-turner remotes pair as keyboards:
+  // Space/Enter/→/PageDown toggle play, ↑/←/PageUp jump back, ↓ jumps forward.
+  useEffect(() => {
+    function nudgeScroll(delta: number) {
+      const el = textRef.current
+      if (!el) return
+      const maxScroll = el.scrollHeight - el.clientHeight
+      progressRef.current = Math.min(maxScroll, Math.max(0, progressRef.current + delta))
+      el.scrollTop = progressRef.current
+    }
+
+    function onKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null
+      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return
+
+      switch (e.code) {
+        case 'Space':
+        case 'Enter':
+        case 'ArrowRight':
+        case 'PageDown':
+          e.preventDefault()
+          if (!e.repeat) setPlaying((p) => !p)
+          break
+        case 'ArrowUp':
+        case 'ArrowLeft':
+        case 'PageUp':
+          e.preventDefault()
+          nudgeScroll(-200)
+          break
+        case 'ArrowDown':
+          e.preventDefault()
+          nudgeScroll(200)
+          break
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   useEffect(() => {
     let raf = 0
     const textEl = textRef.current
@@ -588,6 +660,9 @@ function PromptView({
           paddingBottom: '45vh',
           paddingLeft: settings.margin,
           paddingRight: settings.margin,
+          ...(settings.focusBand
+            ? { WebkitMaskImage: FOCUS_BAND_MASK, maskImage: FOCUS_BAND_MASK }
+            : {}),
         }}
       >
         <p
@@ -778,6 +853,14 @@ function PromptView({
                   onChange={(e) => onUpdateSettings({ mirror: e.target.checked })}
                 />
                 Mirror
+              </label>
+              <label className="flex items-center gap-2 text-xs text-white/80">
+                <input
+                  type="checkbox"
+                  checked={settings.focusBand}
+                  onChange={(e) => onUpdateSettings({ focusBand: e.target.checked })}
+                />
+                Focus band
               </label>
             </div>
           )}
