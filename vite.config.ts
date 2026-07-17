@@ -11,9 +11,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Prompter PWA',
-        short_name: 'Prompter',
-        description: 'Personal teleprompter PWA with camera preview',
+        name: 'TalkShot',
+        short_name: 'TalkShot',
+        description: 'Teleprompter that films you while you read — for short-form creators',
         theme_color: '#000000',
         background_color: '#000000',
         display: 'standalone',

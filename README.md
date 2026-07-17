@@ -1,6 +1,6 @@
-# Prompter PWA
+# TalkShot
 
-A personal MVP teleprompter PWA built with Vite + React + TypeScript + Tailwind CSS.
+A teleprompter PWA that films you while you read — for short-form creators. Built with Vite + React + TypeScript + Tailwind CSS.
 
 It shows a full-screen camera preview using `getUserMedia`, starts with the front-facing camera, and lets you flip between front and back cameras.
 

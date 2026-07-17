@@ -213,7 +213,7 @@ function ScriptListView({
   return (
     <div className="flex h-full flex-col bg-zinc-950 p-4 pt-12">
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Prompter</h1>
+        <h1 className="text-2xl font-bold">TalkShot</h1>
         <div className="flex items-center gap-2">
         <button
           type="button"
@@ -837,11 +837,11 @@ function PromptView({
     try {
       const response = await fetch(recordedUrl)
       const blob = await response.blob()
-      const fileName = `prompter-${Date.now()}.${blob.type.includes('mp4') ? 'mp4' : 'webm'}`
+      const fileName = `talkshot-${Date.now()}.${blob.type.includes('mp4') ? 'mp4' : 'webm'}`
       const file = new File([blob], fileName, { type: blob.type })
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: 'Prompter recording' })
+        await navigator.share({ files: [file], title: 'TalkShot recording' })
       } else {
         const a = document.createElement('a')
         a.href = recordedUrl
