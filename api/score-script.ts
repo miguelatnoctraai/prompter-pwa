@@ -54,7 +54,7 @@ Judge for the medium: the first 1-2 seconds decide whether viewers scroll past, 
 If the user provides a separate hook and body, score the hook separately from the body and use them together as the full script when judging clarity, pacing, and overall. When rewriting, return a stronger hook AND a rewritten body that keeps the creator's voice and message.`
 
 export default async function handler(
-  req: { method?: string; body?: { title?: unknown; body?: unknown } },
+  req: { method?: string; body?: { title?: unknown; hook?: unknown; body?: unknown } },
   res: {
     status: (code: number) => { json: (data: unknown) => void }
     setHeader: (name: string, value: string) => void
