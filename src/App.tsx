@@ -1172,15 +1172,15 @@ function PromptView({
         }}
       >
         {settings.focusMode ? (
-          <p
-            className="w-full whitespace-pre-wrap px-4 text-center font-semibold text-white drop-shadow-lg"
-            style={{
-              fontSize: Math.max(settings.fontSize, 48),
-              lineHeight: settings.lineHeight,
-            }}
-          >
-            {chunks[chunkIndex]}
-          </p>
+        <p
+          className="w-full whitespace-pre-wrap px-4 text-center font-semibold text-white drop-shadow-lg"
+          style={{
+            fontSize: settings.fontSize,
+            lineHeight: settings.lineHeight,
+          }}
+        >
+          {chunks[chunkIndex]}
+        </p>
         ) : (
           <p
             className="whitespace-pre-wrap text-center font-semibold text-white drop-shadow-lg"
