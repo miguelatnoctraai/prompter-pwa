@@ -15,6 +15,34 @@ const TOMBSTONE_KEY = 'prompter.deleted.v1'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+const SEEDED_KEY = 'prompter.seeded.v1'
+
+const DEMO_TITLE = '👋 Read me first'
+const DEMO_BODY = `Hey. This is TalkShot.
+
+Right now you're reading these words while the camera films you — and to anyone watching, it just looks like you're talking.
+
+That's the whole trick. The text sits at your eye line, so you never look away from the lens.
+
+Hit Play to watch it scroll. Pinch of nerves? Totally normal.
+
+When you're ready, go write your own script — or hit Record right now, just to see how natural you look.
+
+One more thing: your first take will be garbage. Record it anyway. Everyone's is.`
+
+// First launch only: give the user a script that teaches the product by being
+// read aloud. Existing users (any scripts present) just get the flag set.
+export function seedDemoScriptIfFirstRun() {
+  if (localStorage.getItem(SEEDED_KEY)) return
+  localStorage.setItem(SEEDED_KEY, '1')
+  const existing = loadScripts()
+  if (existing.length > 0) return
+  const now = Date.now()
+  saveScripts([
+    { id: crypto.randomUUID(), title: DEMO_TITLE, body: DEMO_BODY, createdAt: now, updatedAt: now },
+  ])
+}
+
 export function loadScripts(): Script[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)

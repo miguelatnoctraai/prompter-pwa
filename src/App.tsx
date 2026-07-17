@@ -9,6 +9,7 @@ import {
   pushScript,
   pushDeletion,
   fullSync,
+  seedDemoScriptIfFirstRun,
 } from './lib/scriptStore'
 
 interface Settings {
@@ -49,7 +50,10 @@ function saveSettings(settings: Settings) {
 
 export default function App() {
   const [view, setView] = useState<'list' | 'edit' | 'prompt' | 'account'>('list')
-  const [scripts, setScripts] = useState<Script[]>(loadScripts)
+  const [scripts, setScripts] = useState<Script[]>(() => {
+    seedDemoScriptIfFirstRun()
+    return loadScripts()
+  })
   const [activeScriptId, setActiveScriptId] = useState<string | null>(null)
   const [settings, setSettings] = useState<Settings>(loadSettings)
   const [session, setSession] = useState<Session | null>(null)
@@ -297,14 +301,15 @@ function ScriptListView({
       )}
 
       {scripts.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-4 text-zinc-400">
-          <p>No scripts yet.</p>
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center text-zinc-400">
+          <p className="text-3xl">🎬</p>
+          <p>Write what you want to say — TalkShot scrolls it at your eye line while you film.</p>
           <button
             type="button"
             onClick={onCreate}
             className="rounded-full bg-white px-6 py-3 font-semibold text-black active:scale-95"
           >
-            Create your first script
+            Write your first script
           </button>
         </div>
       ) : (
