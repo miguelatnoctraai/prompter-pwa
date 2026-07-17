@@ -1,0 +1,104 @@
+# Prompter PWA — Feature Status
+
+Last updated: 2026-07-17
+
+## ✅ Shipped
+
+- **Script list + localStorage persistence**
+  - Create, edit, delete, and title scripts.
+  - All data stored in `localStorage`.
+
+- **Camera preview**
+  - Front/back camera switching.
+  - Portrait orientation (matches short-form filming).
+  - Works on iPhone Safari over HTTPS.
+
+- **Scrolling teleprompter overlay**
+  - Adjustable font size, speed, and margin.
+  - Mirror text toggle.
+  - Play / pause / reset controls.
+  - Auto-scroll at fixed speed.
+
+- **Video recording**
+  - 3-second countdown before recording starts.
+  - Records camera + microphone together.
+  - Recording indicator and elapsed timer.
+  - Auto-scroll starts when recording begins.
+  - Stop recording → review + share.
+  - Web Share API to save to iPhone Photos.
+
+- **PWA basics**
+  - Vite + React + TypeScript + Tailwind CSS.
+  - `vite-plugin-pwa` with service worker.
+  - Deployed to Vercel.
+  - Add-to-Home-Screen support on iOS.
+
+## 🔄 In Progress / Needs Polish
+
+- **Aspect-ratio guide overlays**
+  - Add transparent frame guides for 9:16, 4:5, 1:1 so creators know what will be cropped by platforms.
+
+- **Onboarding + permissions UX**
+  - First-run explanation of why camera + microphone are needed.
+  - Safari permission denied state with reload instructions.
+
+- **PWA install prompt**
+  - Surface "Add to Home Screen" instructions for iOS users.
+
+- **Settings validation**
+  - Current numeric inputs in settings can be edited to invalid values.
+
+## 📝 Feature Requests
+
+### 1. Voice-activated scrolling
+**Idea:** The teleprompter listens to your voice and scrolls forward only when you actually speak the words. Auto-pauses when you pause, catches up if you speed up.
+
+**Why it matters:** Fixed-speed scroll forces creators to chase the text. Voice-driven scroll would make delivery feel natural.
+
+**Blocker in PWA:** iOS Safari cannot reliably share the microphone between `MediaRecorder` (recording video audio) and the Web Speech API (transcribing voice). Voice scroll would therefore only work in **rehearsal/practice mode** (no recording), not while recording.
+
+**Decision:** Deferred. If voice-while-recording is a must-have differentiator, this becomes the reason to build a native iOS app.
+
+### 2. Cloud sync / unlimited scripts
+**Idea:** Sync scripts across devices and remove the free-tier script limit.
+
+**Business context:** Freemium plan — first 3 scripts free, then pay for unlimited + cloud sync.
+
+**Blocker:** Needs backend (auth, storage, payments). Not built yet.
+
+**Decision:** Deferred until there is user demand or paid validation.
+
+### 3. Remote control
+**Idea:** Use a second phone or a Bluetooth controller to pause/play/scroll while filming.
+
+**Decision:** Deferred. Could be built later via WebRTC or a simple pairing code.
+
+### 4. Speed presets
+**Idea:** Slow / Normal / Fast one-tap speed buttons.
+
+**Decision:** Low priority. Current slider already works.
+
+### 5. Better export formats
+**Idea:** Ensure saved videos are `.mp4` on all iPhones, not `.webm`.
+
+**Blocker:** Safari on iOS usually records `.mp4`, but some configurations produce `.webm`. Client-side conversion is possible but heavy.
+
+**Decision:** Monitor real-world behavior first.
+
+### 6. Background music / watermarking
+**Idea:** Add intro/outro cards, captions, or background audio.
+
+**Decision:** Out of scope for core teleprompter. Keep the app focused.
+
+## 🚧 Native iOS Considerations
+
+If voice-while-recording becomes non-negotiable, the project should move to native iOS:
+
+- **Language:** Swift
+- **UI:** SwiftUI for fast iteration
+- **Camera/Recording:** AVFoundation + `AVCaptureVideoDataOutput` / `AVCaptureAudioDataOutput`
+- **Speech recognition:** `SFSpeechRecognizer` or `SpeechAnalyzer` (newer iOS APIs)
+- **Advantage:** One microphone stream can feed both recording and speech recognition simultaneously.
+- **Requirement:** Mac with Xcode for building/testing/deploying to App Store.
+
+Current project intentionally stays PWA because the user does not have a Mac.
