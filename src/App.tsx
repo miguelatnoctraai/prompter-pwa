@@ -544,6 +544,14 @@ function AccountView({
   )
 }
 
+interface ScriptScore {
+  scores: { hook: number; clarity: number; pacing: number; cta: number; overall: number }
+  estimated_seconds: number
+  strengths: string[]
+  suggestions: string[]
+  rewrite_hook: string
+}
+
 function EditScriptView({
   title,
   body,
@@ -561,6 +569,43 @@ function EditScriptView({
   onSave: () => void
   onCancel: () => void
 }) {
+  const [score, setScore] = useState<ScriptScore | null>(null)
+  const [scoring, setScoring] = useState(false)
+  const [scoreError, setScoreError] = useState<string | null>(null)
+
+  const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0
+  // ~150 spoken words per minute is a natural short-form pace.
+  const readSeconds = Math.round((wordCount / 150) * 60)
+
+  async function scoreScript() {
+    setScoring(true)
+    setScoreError(null)
+    setScore(null)
+    try {
+      const resp = await fetch('/api/score-script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, body }),
+      })
+      if (!resp.ok) {
+        let message = 'Scoring failed. Try again.'
+        try {
+          const data = (await resp.json()) as { error?: string }
+          if (data.error) message = data.error
+        } catch {
+          if (resp.status === 404) message = 'Scoring is only available on the deployed app.'
+        }
+        setScoreError(message)
+        return
+      }
+      setScore((await resp.json()) as ScriptScore)
+    } catch {
+      setScoreError('Could not reach the scoring service. Are you online?')
+    } finally {
+      setScoring(false)
+    }
+  }
+
   return (
     <div className="flex h-full flex-col bg-zinc-950 p-4 pt-12">
       <div className="mb-4 flex items-center justify-between">
@@ -582,14 +627,93 @@ function EditScriptView({
         onChange={(e) => onBodyChange(e.target.value)}
         className="flex-1 resize-none rounded-xl bg-zinc-900 p-4 text-base leading-relaxed placeholder-zinc-500 outline-none"
       />
-      <button
-        type="button"
-        onClick={onSave}
-        disabled={!body.trim()}
-        className="mt-4 w-full rounded-full bg-white py-4 font-semibold text-black disabled:opacity-40 active:scale-95"
-      >
-        Save
-      </button>
+      {wordCount > 0 && (
+        <p className="mt-2 text-xs text-zinc-500">
+          {wordCount} words · ~{readSeconds}s spoken
+        </p>
+      )}
+
+      {score && (
+        <div className="mt-3 max-h-64 overflow-y-auto rounded-2xl bg-zinc-900 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
+              Script score
+            </h2>
+            <button
+              type="button"
+              onClick={() => setScore(null)}
+              className="text-xs text-zinc-500 active:scale-95"
+            >
+              Dismiss
+            </button>
+          </div>
+          <div className="mb-3 grid grid-cols-5 gap-2 text-center">
+            {(
+              [
+                ['Hook', score.scores.hook],
+                ['Clarity', score.scores.clarity],
+                ['Pacing', score.scores.pacing],
+                ['CTA', score.scores.cta],
+                ['Overall', score.scores.overall],
+              ] as const
+            ).map(([label, value]) => (
+              <div key={label} className="rounded-lg bg-zinc-800 py-2">
+                <p className="text-lg font-bold">{value}</p>
+                <p className="text-[10px] uppercase tracking-wide text-zinc-400">{label}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mb-2 text-xs text-zinc-400">
+            Estimated duration: ~{score.estimated_seconds}s
+          </p>
+          {score.strengths.length > 0 && (
+            <div className="mb-2">
+              <p className="text-xs font-semibold text-emerald-400">Working well</p>
+              <ul className="list-disc pl-4 text-sm text-zinc-300">
+                {score.strengths.map((s) => (
+                  <li key={s}>{s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {score.suggestions.length > 0 && (
+            <div className="mb-2">
+              <p className="text-xs font-semibold text-amber-400">Improve</p>
+              <ul className="list-disc pl-4 text-sm text-zinc-300">
+                {score.suggestions.map((s) => (
+                  <li key={s}>{s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {score.rewrite_hook && (
+            <div>
+              <p className="text-xs font-semibold text-sky-400">Stronger opening line</p>
+              <p className="text-sm italic text-zinc-300">“{score.rewrite_hook}”</p>
+            </div>
+          )}
+        </div>
+      )}
+      {scoreError && <p className="mt-2 text-center text-sm text-red-400">{scoreError}</p>}
+
+      <div className="mt-4 flex gap-3">
+        <button
+          type="button"
+          onClick={scoreScript}
+          disabled={!body.trim() || scoring}
+          className="flex-1 rounded-full bg-zinc-800 py-4 font-semibold text-white disabled:opacity-40 active:scale-95"
+        >
+          {scoring ? 'Scoring…' : '✨ Score'}
+        </button>
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={!body.trim()}
+          className="flex-[2] rounded-full bg-white py-4 font-semibold text-black disabled:opacity-40 active:scale-95"
+        >
+          Save
+        </button>
+      </div>
     </div>
   )
 }

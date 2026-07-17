@@ -16,6 +16,14 @@ Last updated: 2026-07-17
   - Cheap Bluetooth camera remotes and page-turner clickers pair as keyboards.
   - Space / Enter / → / PageDown: play–pause. ↑ / ← / PageUp: jump back. ↓: jump forward.
 
+- **AI script scoring**
+  - "✨ Score" in the editor sends the script to `/api/score-script` (Vercel serverless
+    function calling Claude `claude-opus-4-8` with structured JSON output).
+  - Scores hook / clarity / pacing / CTA / overall (0-10), estimates spoken duration,
+    lists strengths + concrete suggestions, and rewrites the opening line.
+  - Requires `ANTHROPIC_API_KEY` in Vercel env vars; degrades gracefully when absent.
+  - Also: live word count + spoken-duration estimate in the editor (client-side, free).
+
 - **Accounts + cloud sync (client side)**
   - Supabase auth via email one-time code (PWA-friendly — no magic-link/Safari handoff).
   - Local-first: localStorage stays the source of truth; saves/deletes write through to
