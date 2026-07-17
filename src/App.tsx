@@ -381,36 +381,52 @@ function PromptView({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const textRef = useRef<HTMLDivElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const recordedChunksRef = useRef<Blob[]>([])
+  const startTimeRef = useRef<number>(0)
+  const timerRef = useRef<number | null>(null)
+  const progressRef = useRef(0)
+
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [playing, setPlaying] = useState(false)
   const [showControls, setShowControls] = useState(true)
-  const progressRef = useRef(0)
+  const [isRecording, setIsRecording] = useState(false)
+  const [countdown, setCountdown] = useState(0)
+  const [elapsed, setElapsed] = useState(0)
+  const [recordedUrl, setRecordedUrl] = useState<string | null>(null)
+
+  async function startCamera() {
+    streamRef.current?.getTracks().forEach((track) => track.stop())
+    streamRef.current = null
+    setError(null)
+    setLoading(true)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      })
+      streamRef.current = stream
+      if (videoRef.current) videoRef.current.srcObject = stream
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Camera/microphone access failed.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    let stream: MediaStream | null = null
-
-    async function startCamera() {
-      setError(null)
-      setLoading(true)
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
-          audio: false,
-        })
-        if (videoRef.current) videoRef.current.srcObject = stream
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Camera access failed.')
-      } finally {
-        setLoading(false)
-      }
-    }
-
     void startCamera()
     return () => {
-      stream?.getTracks().forEach((track) => track.stop())
+      streamRef.current?.getTracks().forEach((track) => track.stop())
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facingMode])
 
   useEffect(() => {
@@ -420,7 +436,7 @@ function PromptView({
 
     function scroll() {
       if (!playing || !textEl) return
-      const speedPxPerSec = settings.speed * 2 // scale to comfortable range
+      const speedPxPerSec = settings.speed * 2
       progressRef.current += speedPxPerSec / 60
       textEl.scrollTop = progressRef.current
       const maxScroll = textEl.scrollHeight - textEl.clientHeight
@@ -438,6 +454,20 @@ function PromptView({
     return () => cancelAnimationFrame(raf)
   }, [playing, settings.speed])
 
+  useEffect(() => {
+    if (isRecording && !recordedUrl) {
+      startTimeRef.current = Date.now()
+      timerRef.current = window.setInterval(() => {
+        setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000))
+      }, 1000)
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+  }, [isRecording, recordedUrl])
+
   function resetScroll() {
     progressRef.current = 0
     if (textRef.current) textRef.current.scrollTop = 0
@@ -448,9 +478,107 @@ function PromptView({
     setPlaying((p) => !p)
   }
 
+  async function startRecordingWithCountdown() {
+    setRecordedUrl(null)
+    setElapsed(0)
+    setCountdown(3)
+    for (let i = 3; i > 0; i--) {
+      setCountdown(i)
+      await new Promise((res) => setTimeout(res, 1000))
+    }
+    setCountdown(0)
+    startRecording()
+  }
+
+  function startRecording() {
+    const stream = streamRef.current
+    if (!stream) {
+      setError('Camera is not ready.')
+      return
+    }
+
+    recordedChunksRef.current = []
+    let mimeType = 'video/mp4'
+    if (!MediaRecorder.isTypeSupported('video/mp4')) {
+      mimeType = 'video/webm;codecs=h264'
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'video/webm'
+      }
+    }
+
+    try {
+      const recorder = new MediaRecorder(stream, { mimeType })
+      recorderRef.current = recorder
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) recordedChunksRef.current.push(e.data)
+      }
+
+      recorder.onstop = () => {
+        const blob = new Blob(recordedChunksRef.current, { type: mimeType })
+        const url = URL.createObjectURL(blob)
+        setRecordedUrl(url)
+        setElapsed(0)
+      }
+
+      recorder.onerror = () => {
+        setError('Recording failed.')
+        setIsRecording(false)
+        setPlaying(false)
+      }
+
+      recorder.start(100)
+      setIsRecording(true)
+      setPlaying(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not start recording.')
+    }
+  }
+
+  function stopRecording() {
+    recorderRef.current?.stop()
+    setIsRecording(false)
+    setPlaying(false)
+  }
+
+  async function shareVideo() {
+    if (!recordedUrl) return
+    try {
+      const response = await fetch(recordedUrl)
+      const blob = await response.blob()
+      const fileName = `prompter-${Date.now()}.${blob.type.includes('mp4') ? 'mp4' : 'webm'}`
+      const file = new File([blob], fileName, { type: blob.type })
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Prompter recording' })
+      } else {
+        const a = document.createElement('a')
+        a.href = recordedUrl
+        a.download = fileName
+        a.click()
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not share video.')
+    }
+  }
+
+  function formatTime(totalSeconds: number) {
+    const m = Math.floor(totalSeconds / 60)
+      .toString()
+      .padStart(2, '0')
+    const s = (totalSeconds % 60).toString().padStart(2, '0')
+    return `${m}:${s}`
+  }
+
   return (
     <div className="relative h-full w-full overflow-hidden bg-black">
-      <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 h-full w-full object-cover" />
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        className="absolute inset-0 h-full w-full object-cover"
+      />
 
       <div
         ref={textRef}
@@ -486,8 +614,13 @@ function PromptView({
           </button>
         </div>
       )}
+      {countdown > 0 && (
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/50 text-8xl font-bold text-white">
+          {countdown}
+        </div>
+      )}
 
-      {showControls && (
+      {showControls && !isRecording && !recordedUrl && (
         <div className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-black/70 to-transparent p-4 pt-12">
           <div className="flex items-center justify-between">
             <button onClick={onBack} className="rounded-full bg-white/20 px-4 py-2 text-sm text-white backdrop-blur-sm active:scale-95">
@@ -507,7 +640,7 @@ function PromptView({
         </div>
       )}
 
-      {!showControls && (
+      {!showControls && !isRecording && !recordedUrl && (
         <button
           onClick={() => setShowControls(true)}
           className="absolute left-4 top-12 z-10 rounded-full bg-white/20 p-2 text-white backdrop-blur-sm active:scale-95"
@@ -519,74 +652,137 @@ function PromptView({
         </button>
       )}
 
-      <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/80 to-transparent p-4 pb-8">
-        <div className="flex items-center justify-center gap-3">
-          <button
-            onClick={resetScroll}
-            className="rounded-full bg-white/20 p-3 text-white backdrop-blur-sm active:scale-95"
-            aria-label="Reset"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-              <path d="M3 3v5h5" />
-            </svg>
-          </button>
+      {isRecording && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-center gap-2 p-4 pt-12">
+          <span className="h-3 w-3 animate-pulse rounded-full bg-red-500" />
+          <span className="rounded-md bg-black/40 px-2 py-1 font-mono text-sm text-white backdrop-blur-sm">
+            {formatTime(elapsed)}
+          </span>
+        </div>
+      )}
 
+      {recordedUrl ? (
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-black/90 p-6 text-center text-white">
+          <p className="text-lg font-semibold">Recording complete</p>
+          <p className="text-sm text-zinc-300">
+            Tap Share to save to Photos, or Retake to record again.
+          </p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                setRecordedUrl(null)
+                resetScroll()
+              }}
+              className="rounded-full bg-zinc-800 px-6 py-3 font-semibold text-white active:scale-95"
+            >
+              Retake
+            </button>
+            <button
+              onClick={shareVideo}
+              className="rounded-full bg-white px-6 py-3 font-semibold text-black active:scale-95"
+            >
+              Share video
+            </button>
+          </div>
           <button
-            onClick={togglePlay}
-            className="rounded-full bg-white px-6 py-3 font-bold text-black shadow-lg active:scale-95"
+            onClick={onBack}
+            className="mt-2 text-sm text-zinc-400 active:scale-95"
           >
-            {playing ? 'Pause' : 'Play'}
-          </button>
-
-          <button
-            onClick={() => setFacingMode((m) => (m === 'user' ? 'environment' : 'user'))}
-            className="rounded-full bg-white/20 p-3 text-white backdrop-blur-sm active:scale-95"
-            aria-label="Flip camera"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M11 19H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5" />
-              <path d="M13 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5" />
-              <circle cx="12" cy="12" r="3" />
-              <path d="m18 22-3-3 3-3" />
-              <path d="m6 2 3 3-3 3" />
-            </svg>
+            Back to scripts
           </button>
         </div>
+      ) : (
+        <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/80 to-transparent p-4 pb-8">
+          <div className="flex items-center justify-center gap-3">
+            {!isRecording && (
+              <button
+                onClick={resetScroll}
+                className="rounded-full bg-white/20 p-3 text-white backdrop-blur-sm active:scale-95"
+                aria-label="Reset"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                  <path d="M3 3v5h5" />
+                </svg>
+              </button>
+            )}
 
-        {showControls && (
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1 text-xs text-white/80">
-              Font size
-              <input
-                type="range"
-                min="20"
-                max="80"
-                value={settings.fontSize}
-                onChange={(e) => onUpdateSettings({ fontSize: Number(e.target.value) })}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-white/80">
-              Speed
-              <input
-                type="range"
-                min="10"
-                max="150"
-                value={settings.speed}
-                onChange={(e) => onUpdateSettings({ speed: Number(e.target.value) })}
-              />
-            </label>
-            <label className="flex items-center gap-2 text-xs text-white/80">
-              <input
-                type="checkbox"
-                checked={settings.mirror}
-                onChange={(e) => onUpdateSettings({ mirror: e.target.checked })}
-              />
-              Mirror
-            </label>
+            {!isRecording ? (
+              <>
+                <button
+                  onClick={togglePlay}
+                  className="rounded-full bg-white px-6 py-3 font-bold text-black shadow-lg active:scale-95"
+                >
+                  {playing ? 'Pause' : 'Play'}
+                </button>
+                <button
+                  onClick={startRecordingWithCountdown}
+                  className="flex items-center gap-2 rounded-full bg-red-500 px-6 py-3 font-bold text-white shadow-lg active:scale-95"
+                >
+                  <span className="h-3 w-3 rounded-full bg-white" />
+                  Record
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={stopRecording}
+                className="flex items-center gap-2 rounded-full bg-white px-6 py-3 font-bold text-black shadow-lg active:scale-95"
+              >
+                ■ Stop
+              </button>
+            )}
+
+            {!isRecording && (
+              <button
+                onClick={() => setFacingMode((m) => (m === 'user' ? 'environment' : 'user'))}
+                className="rounded-full bg-white/20 p-3 text-white backdrop-blur-sm active:scale-95"
+                aria-label="Flip camera"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M11 19H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5" />
+                  <path d="M13 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5" />
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="m18 22-3-3 3-3" />
+                  <path d="m6 2 3 3-3 3" />
+                </svg>
+              </button>
+            )}
           </div>
-        )}
-      </div>
+
+          {showControls && !isRecording && (
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <label className="flex flex-col gap-1 text-xs text-white/80">
+                Font size
+                <input
+                  type="range"
+                  min="20"
+                  max="80"
+                  value={settings.fontSize}
+                  onChange={(e) => onUpdateSettings({ fontSize: Number(e.target.value) })}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-white/80">
+                Speed
+                <input
+                  type="range"
+                  min="10"
+                  max="150"
+                  value={settings.speed}
+                  onChange={(e) => onUpdateSettings({ speed: Number(e.target.value) })}
+                />
+              </label>
+              <label className="flex items-center gap-2 text-xs text-white/80">
+                <input
+                  type="checkbox"
+                  checked={settings.mirror}
+                  onChange={(e) => onUpdateSettings({ mirror: e.target.checked })}
+                />
+                Mirror
+              </label>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
