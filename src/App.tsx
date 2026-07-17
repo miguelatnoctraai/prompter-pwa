@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import {
@@ -19,6 +19,7 @@ interface Settings {
   mirror: boolean
   margin: number
   focusBand: boolean
+  focusMode: boolean
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -28,6 +29,7 @@ const DEFAULT_SETTINGS: Settings = {
   mirror: false,
   margin: 16,
   focusBand: true,
+  focusMode: false,
 }
 
 // Fades text away from the eye-level line (~45vh, where scrolling text enters)
@@ -296,6 +298,14 @@ function ScriptListView({
               onChange={(e) => onUpdateSettings({ mirror: e.target.checked })}
             />
             Mirror text by default
+          </label>
+          <label className="mt-2 flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={settings.focusMode}
+              onChange={(e) => onUpdateSettings({ focusMode: e.target.checked })}
+            />
+            Focus mode (one line at a time)
           </label>
         </div>
       )}
@@ -723,6 +733,29 @@ function EditScriptView({
   )
 }
 
+function splitIntoChunks(text: string): string[] {
+  // Split on sentence terminators, then merge very short fragments with the next chunk.
+  const sentences = text
+    .replace(/([.!?])\s+/g, '$1\n')
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean)
+
+  const chunks: string[] = []
+  let carry = ''
+  for (const sentence of sentences) {
+    const candidate = carry ? `${carry} ${sentence}` : sentence
+    if (candidate.split(/\s+/).length < 6) {
+      carry = candidate
+    } else {
+      chunks.push(candidate)
+      carry = ''
+    }
+  }
+  if (carry) chunks.push(carry)
+  return chunks.length ? chunks : [text]
+}
+
 function PromptView({
   script,
   settings,
@@ -755,6 +788,9 @@ function PromptView({
   const [recordedUrl, setRecordedUrl] = useState<string | null>(null)
   const pausedAtRef = useRef<number | null>(null)
   const totalPausedMsRef = useRef(0)
+
+  const chunks = useMemo(() => splitIntoChunks(script.body), [script.body])
+  const [chunkIndex, setChunkIndex] = useState(0)
 
   async function startCamera() {
     streamRef.current?.getTracks().forEach((track) => track.stop())
@@ -833,17 +869,31 @@ function PromptView({
         case 'ArrowRight':
         case 'PageDown':
           e.preventDefault()
-          if (!e.repeat) setPlaying((p) => !p)
+          if (!e.repeat) {
+            if (settings.focusMode) {
+              nextChunk()
+            } else {
+              setPlaying((p) => !p)
+            }
+          }
           break
         case 'ArrowUp':
         case 'ArrowLeft':
         case 'PageUp':
           e.preventDefault()
-          nudgeScroll(-200)
+          if (settings.focusMode) {
+            setChunkIndex((i) => Math.max(0, i - 1))
+          } else {
+            nudgeScroll(-200)
+          }
           break
         case 'ArrowDown':
           e.preventDefault()
-          nudgeScroll(200)
+          if (settings.focusMode) {
+            nextChunk()
+          } else {
+            nudgeScroll(200)
+          }
           break
       }
     }
@@ -895,6 +945,17 @@ function PromptView({
     progressRef.current = 0
     if (textRef.current) textRef.current.scrollTop = 0
     setPlaying(false)
+    setChunkIndex(0)
+  }
+
+  function nextChunk() {
+    setChunkIndex((i) => {
+      if (i >= chunks.length - 1) {
+        setPlaying(false)
+        return i
+      }
+      return i + 1
+    })
   }
 
   function togglePlay() {
@@ -1040,27 +1101,53 @@ function PromptView({
 
       <div
         ref={textRef}
-        className={`no-scrollbar absolute inset-0 overflow-y-auto ${settings.mirror ? 'scale-x-[-1]' : ''}`}
+        onClick={() => {
+          if (settings.focusMode && isRecording) nextChunk()
+        }}
+        className={`no-scrollbar absolute inset-0 overflow-y-auto ${settings.mirror ? 'scale-x-[-1]' : ''} ${settings.focusMode ? 'flex items-center justify-center' : ''}`}
         style={{
-          paddingTop: '45vh',
-          paddingBottom: '45vh',
+          paddingTop: settings.focusMode ? undefined : '45vh',
+          paddingBottom: settings.focusMode ? undefined : '45vh',
           paddingLeft: settings.margin,
           paddingRight: settings.margin,
-          ...(settings.focusBand
+          ...(settings.focusBand && !settings.focusMode
             ? { WebkitMaskImage: FOCUS_BAND_MASK, maskImage: FOCUS_BAND_MASK }
             : {}),
         }}
       >
-        <p
-          className="whitespace-pre-wrap text-center font-semibold text-white drop-shadow-lg"
-          style={{
-            fontSize: settings.fontSize,
-            lineHeight: settings.lineHeight,
-          }}
-        >
-          {script.body}
-        </p>
+        {settings.focusMode ? (
+          <p
+            className="w-full whitespace-pre-wrap px-4 text-center font-semibold text-white drop-shadow-lg"
+            style={{
+              fontSize: Math.max(settings.fontSize, 48),
+              lineHeight: settings.lineHeight,
+            }}
+          >
+            {chunks[chunkIndex]}
+          </p>
+        ) : (
+          <p
+            className="whitespace-pre-wrap text-center font-semibold text-white drop-shadow-lg"
+            style={{
+              fontSize: settings.fontSize,
+              lineHeight: settings.lineHeight,
+            }}
+          >
+            {script.body}
+          </p>
+        )}
       </div>
+
+      {settings.focusMode && isRecording && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-32 z-10 flex items-center justify-center gap-1">
+          {chunks.map((_, i) => (
+            <span
+              key={i}
+              className={`h-1.5 w-1.5 rounded-full transition-colors ${i === chunkIndex ? 'bg-white' : 'bg-white/30'}`}
+            />
+          ))}
+        </div>
+      )}
 
       {loading && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-white/80">
@@ -1195,10 +1282,10 @@ function PromptView({
             )}
             {!isRecording && (
               <button
-                onClick={togglePlay}
+                onClick={settings.focusMode ? nextChunk : togglePlay}
                 className="rounded-full bg-white px-6 py-3 font-bold text-black shadow-lg active:scale-95"
               >
-                {playing ? 'Pause' : 'Play'}
+                {settings.focusMode ? 'Next' : playing ? 'Pause' : 'Play'}
               </button>
             )}
             {!isRecording && (
@@ -1265,6 +1352,14 @@ function PromptView({
                   onChange={(e) => onUpdateSettings({ focusBand: e.target.checked })}
                 />
                 Focus band
+              </label>
+              <label className="flex items-center gap-2 text-xs text-white/80">
+                <input
+                  type="checkbox"
+                  checked={settings.focusMode}
+                  onChange={(e) => onUpdateSettings({ focusMode: e.target.checked })}
+                />
+                Focus mode
               </label>
             </div>
           )}
