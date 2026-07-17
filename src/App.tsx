@@ -224,15 +224,18 @@ function ScriptListView({
         <button
           type="button"
           onClick={onAccount}
-          className="relative rounded-full bg-zinc-800 p-3 text-white active:scale-95"
+          className="relative flex items-center gap-2 rounded-full bg-zinc-800 px-3 py-2 text-sm text-white active:scale-95"
           aria-label="Account"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
             <circle cx="12" cy="7" r="4" />
           </svg>
-          {signedIn && (
-            <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-emerald-400" />
+          <span className="hidden sm:inline">{signedIn ? 'Account' : 'Sync'}</span>
+          {signedIn ? (
+            <span className="h-2 w-2 rounded-full bg-emerald-400" />
+          ) : (
+            <span className="h-2 w-2 rounded-full bg-zinc-500" />
           )}
         </button>
         <button
@@ -251,7 +254,16 @@ function ScriptListView({
 
       {showSettings && (
         <div className="mb-4 rounded-2xl bg-zinc-900 p-4">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-400">Default display</h2>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Default display</h2>
+            <button
+              type="button"
+              onClick={onAccount}
+              className="text-sm font-medium text-white underline-offset-2 hover:underline"
+            >
+              {signedIn ? 'Account' : 'Sign in to sync'}
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-sm">
               Font size
@@ -394,9 +406,25 @@ function AccountView({
 }) {
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
-  const [stage, setStage] = useState<'email' | 'code'>('email')
+  const [stage, setStage] = useState<'email' | 'code' | 'signedIn'>('email')
   const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
+  const [message, setMessage] = useState<{ text: string; type: 'info' | 'success' | 'error' } | null>(null)
+  const [lastSyncAt, setLastSyncAt] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (session) {
+      setStage('signedIn')
+      setEmail(session.user.email ?? '')
+    } else {
+      setStage('email')
+      setEmail('')
+      setCode('')
+    }
+  }, [session])
+
+  function show(text: string, type: 'info' | 'success' | 'error' = 'info') {
+    setMessage({ text, type })
+  }
 
   async function sendCode() {
     if (!supabase) return
@@ -405,10 +433,10 @@ function AccountView({
     const { error } = await supabase.auth.signInWithOtp({ email: email.trim() })
     setBusy(false)
     if (error) {
-      setMessage(error.message)
+      show(error.message, 'error')
     } else {
       setStage('code')
-      setMessage('Check your email for a login code.')
+      show('We emailed you a one-time code.', 'info')
     }
   }
 
@@ -423,11 +451,11 @@ function AccountView({
     })
     setBusy(false)
     if (error) {
-      setMessage(error.message)
+      show(error.message, 'error')
     } else {
-      setStage('email')
+      setStage('signedIn')
+      show('You’re signed in.', 'success')
       setCode('')
-      setMessage(null)
     }
   }
 
@@ -437,9 +465,10 @@ function AccountView({
     try {
       const merged = await fullSync(loadScripts())
       onScriptsSynced(merged)
-      setMessage(`Synced ${merged.length} script${merged.length === 1 ? '' : 's'}.`)
+      setLastSyncAt(Date.now())
+      show(`Synced ${merged.length} script${merged.length === 1 ? '' : 's'}.`, 'success')
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Sync failed.')
+      show(err instanceof Error ? err.message : 'Sync failed.', 'error')
     } finally {
       setBusy(false)
     }
@@ -447,9 +476,21 @@ function AccountView({
 
   async function signOut() {
     if (!supabase) return
+    const confirmSignOut = window.confirm(
+      'Sign out? Scripts on this device stay here; cloud sync stops until you sign in again.',
+    )
+    if (!confirmSignOut) return
+    setBusy(true)
     await supabase.auth.signOut()
+    setBusy(false)
     setMessage(null)
-    setStage('email')
+  }
+
+  function formatSyncTime(ts: number) {
+    const seconds = Math.floor((Date.now() - ts) / 1000)
+    if (seconds < 60) return 'just now'
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
+    return `${Math.floor(seconds / 3600)}h ago`
   }
 
   return (
@@ -462,18 +503,19 @@ function AccountView({
       </div>
 
       {!supabase ? (
-        <p className="text-zinc-400">
-          Cloud sync is not configured for this build. Scripts are stored on this device only.
-        </p>
-      ) : session ? (
+        <div className="rounded-2xl bg-zinc-900 p-4 text-zinc-400">
+          <p>Cloud sync is not configured for this build.</p>
+          <p className="mt-2 text-sm">Scripts are stored on this device only.</p>
+        </div>
+      ) : stage === 'signedIn' || session ? (
         <div className="space-y-4">
           <div className="rounded-2xl bg-zinc-900 p-4">
             <p className="text-sm text-zinc-400">Signed in as</p>
-            <p className="font-semibold">{session.user.email}</p>
+            <p className="font-semibold">{session?.user.email}</p>
           </div>
           <p className="text-sm text-zinc-400">
-            Your scripts sync to the cloud automatically when you save or delete them. Use Sync
-            now after working offline or on another device.
+            Your scripts sync automatically when you save or delete. Tap Sync now after working
+            offline or on another device.
           </p>
           <button
             type="button"
@@ -481,7 +523,7 @@ function AccountView({
             disabled={busy}
             className="w-full rounded-full bg-white py-3 font-semibold text-black disabled:opacity-40 active:scale-95"
           >
-            {busy ? 'Syncing…' : 'Sync now'}
+            {busy ? 'Syncing…' : lastSyncAt ? `Sync now (${formatSyncTime(lastSyncAt)})` : 'Sync now'}
           </button>
           <button
             type="button"
@@ -495,7 +537,7 @@ function AccountView({
       ) : (
         <div className="space-y-4">
           <p className="text-sm text-zinc-400">
-            Sign in to back up your scripts and sync them across devices. We'll email you a
+            Sign in to back up your scripts and sync them across devices. We’ll email you a
             one-time code — no password needed.
           </p>
           <input
@@ -505,7 +547,7 @@ function AccountView({
             placeholder="you@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            disabled={stage === 'code'}
+            disabled={stage === 'code' || busy}
             className="w-full rounded-xl bg-zinc-900 px-4 py-3 placeholder-zinc-500 outline-none disabled:opacity-60"
           />
           {stage === 'code' && (
@@ -516,7 +558,8 @@ function AccountView({
               placeholder="Code from email"
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              className="w-full rounded-xl bg-zinc-900 px-4 py-3 text-center text-xl tracking-widest placeholder-zinc-500 outline-none"
+              disabled={busy}
+              className="w-full rounded-xl bg-zinc-900 px-4 py-3 text-center text-xl tracking-widest placeholder-zinc-500 outline-none disabled:opacity-60"
             />
           )}
           {stage === 'email' ? (
@@ -545,7 +588,8 @@ function AccountView({
                   setCode('')
                   setMessage(null)
                 }}
-                className="w-full text-sm text-zinc-400 active:scale-95"
+                disabled={busy}
+                className="w-full text-sm text-zinc-400 active:scale-95 disabled:opacity-40"
               >
                 Use a different email
               </button>
@@ -554,7 +598,19 @@ function AccountView({
         </div>
       )}
 
-      {message && <p className="mt-4 text-center text-sm text-zinc-300">{message}</p>}
+      {message && (
+        <div
+          className={`mt-4 rounded-xl p-3 text-center text-sm ${
+            message.type === 'success'
+              ? 'bg-emerald-500/15 text-emerald-300'
+              : message.type === 'error'
+                ? 'bg-red-500/15 text-red-300'
+                : 'bg-zinc-800 text-zinc-300'
+          }`}
+        >
+          {message.text}
+        </div>
+      )}
     </div>
   )
 }
