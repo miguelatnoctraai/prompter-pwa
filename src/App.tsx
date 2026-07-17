@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-
-const STORAGE_KEY = 'prompter.scripts.v1'
-
-interface Script {
-  id: string
-  title: string
-  body: string
-  createdAt: number
-  updatedAt: number
-}
+import type { Session } from '@supabase/supabase-js'
+import { supabase } from './lib/supabase'
+import {
+  type Script,
+  loadScripts,
+  saveScripts,
+  addTombstone,
+  pushScript,
+  pushDeletion,
+  fullSync,
+} from './lib/scriptStore'
 
 interface Settings {
   fontSize: number
@@ -33,19 +34,6 @@ const DEFAULT_SETTINGS: Settings = {
 const FOCUS_BAND_MASK =
   'linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.2) 28%, rgba(0,0,0,1) 40%, rgba(0,0,0,1) 56%, rgba(0,0,0,0.2) 72%, rgba(0,0,0,0.2) 100%)'
 
-function loadScripts(): Script[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as Script[]) : []
-  } catch {
-    return []
-  }
-}
-
-function saveScripts(scripts: Script[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(scripts))
-}
-
 function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem('prompter.settings.v1')
@@ -60,15 +48,33 @@ function saveSettings(settings: Settings) {
 }
 
 export default function App() {
-  const [view, setView] = useState<'list' | 'edit' | 'prompt'>('list')
+  const [view, setView] = useState<'list' | 'edit' | 'prompt' | 'account'>('list')
   const [scripts, setScripts] = useState<Script[]>(loadScripts)
   const [activeScriptId, setActiveScriptId] = useState<string | null>(null)
   const [settings, setSettings] = useState<Settings>(loadSettings)
+  const [session, setSession] = useState<Session | null>(null)
 
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
 
   const activeScript = scripts.find((s) => s.id === activeScriptId) || null
+
+  useEffect(() => {
+    if (!supabase) return
+    void supabase.auth.getSession().then(({ data }) => setSession(data.session))
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession)
+    })
+    return () => sub.subscription.unsubscribe()
+  }, [])
+
+  // On sign-in, reconcile local scripts with the cloud copy.
+  useEffect(() => {
+    if (!session) return
+    fullSync(loadScripts())
+      .then(setScripts)
+      .catch(() => {}) // offline — write-through and manual sync will catch up
+  }, [session])
 
   function createScript() {
     setTitle('')
@@ -108,6 +114,12 @@ export default function App() {
 
     setScripts(nextScripts)
     saveScripts(nextScripts)
+    if (session) {
+      const saved = activeScript
+        ? nextScripts.find((s) => s.id === activeScript.id)
+        : nextScripts[0]
+      if (saved) void pushScript(saved)
+    }
     setView('list')
   }
 
@@ -115,6 +127,8 @@ export default function App() {
     const next = scripts.filter((s) => s.id !== id)
     setScripts(next)
     saveScripts(next)
+    addTombstone(id)
+    if (session) void pushDeletion(id)
   }
 
   function updateSettings(patch: Partial<Settings>) {
@@ -139,6 +153,15 @@ export default function App() {
           onPrompt={startPrompting}
           settings={settings}
           onUpdateSettings={updateSettings}
+          signedIn={!!session}
+          onAccount={() => setView('account')}
+        />
+      )}
+      {view === 'account' && (
+        <AccountView
+          session={session}
+          onBack={() => setView('list')}
+          onScriptsSynced={setScripts}
         />
       )}
       {view === 'edit' && (
@@ -172,6 +195,8 @@ function ScriptListView({
   onPrompt,
   settings,
   onUpdateSettings,
+  signedIn,
+  onAccount,
 }: {
   scripts: Script[]
   onCreate: () => void
@@ -180,6 +205,8 @@ function ScriptListView({
   onPrompt: (s: Script) => void
   settings: Settings
   onUpdateSettings: (p: Partial<Settings>) => void
+  signedIn: boolean
+  onAccount: () => void
 }) {
   const [showSettings, setShowSettings] = useState(false)
 
@@ -187,6 +214,21 @@ function ScriptListView({
     <div className="flex h-full flex-col bg-zinc-950 p-4 pt-12">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Prompter</h1>
+        <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onAccount}
+          className="relative rounded-full bg-zinc-800 p-3 text-white active:scale-95"
+          aria-label="Account"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          {signedIn && (
+            <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-emerald-400" />
+          )}
+        </button>
         <button
           type="button"
           onClick={() => setShowSettings((s) => !s)}
@@ -198,6 +240,7 @@ function ScriptListView({
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z" />
           </svg>
         </button>
+        </div>
       </div>
 
       {showSettings && (
@@ -321,6 +364,182 @@ function ScriptListView({
           <path d="M12 5v14M5 12h14" />
         </svg>
       </button>
+    </div>
+  )
+}
+
+function AccountView({
+  session,
+  onBack,
+  onScriptsSynced,
+}: {
+  session: Session | null
+  onBack: () => void
+  onScriptsSynced: (scripts: Script[]) => void
+}) {
+  const [email, setEmail] = useState('')
+  const [code, setCode] = useState('')
+  const [stage, setStage] = useState<'email' | 'code'>('email')
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+
+  async function sendCode() {
+    if (!supabase) return
+    setBusy(true)
+    setMessage(null)
+    const { error } = await supabase.auth.signInWithOtp({ email: email.trim() })
+    setBusy(false)
+    if (error) {
+      setMessage(error.message)
+    } else {
+      setStage('code')
+      setMessage('Check your email for a 6-digit code.')
+    }
+  }
+
+  async function verifyCode() {
+    if (!supabase) return
+    setBusy(true)
+    setMessage(null)
+    const { error } = await supabase.auth.verifyOtp({
+      email: email.trim(),
+      token: code.trim(),
+      type: 'email',
+    })
+    setBusy(false)
+    if (error) {
+      setMessage(error.message)
+    } else {
+      setStage('email')
+      setCode('')
+      setMessage(null)
+    }
+  }
+
+  async function syncNow() {
+    setBusy(true)
+    setMessage(null)
+    try {
+      const merged = await fullSync(loadScripts())
+      onScriptsSynced(merged)
+      setMessage(`Synced ${merged.length} script${merged.length === 1 ? '' : 's'}.`)
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Sync failed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function signOut() {
+    if (!supabase) return
+    await supabase.auth.signOut()
+    setMessage(null)
+    setStage('email')
+  }
+
+  return (
+    <div className="flex h-full flex-col bg-zinc-950 p-4 pt-12">
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-xl font-bold">Account</h1>
+        <button type="button" onClick={onBack} className="text-zinc-400 active:scale-95">
+          Back
+        </button>
+      </div>
+
+      {!supabase ? (
+        <p className="text-zinc-400">
+          Cloud sync is not configured for this build. Scripts are stored on this device only.
+        </p>
+      ) : session ? (
+        <div className="space-y-4">
+          <div className="rounded-2xl bg-zinc-900 p-4">
+            <p className="text-sm text-zinc-400">Signed in as</p>
+            <p className="font-semibold">{session.user.email}</p>
+          </div>
+          <p className="text-sm text-zinc-400">
+            Your scripts sync to the cloud automatically when you save or delete them. Use Sync
+            now after working offline or on another device.
+          </p>
+          <button
+            type="button"
+            onClick={syncNow}
+            disabled={busy}
+            className="w-full rounded-full bg-white py-3 font-semibold text-black disabled:opacity-40 active:scale-95"
+          >
+            {busy ? 'Syncing…' : 'Sync now'}
+          </button>
+          <button
+            type="button"
+            onClick={signOut}
+            disabled={busy}
+            className="w-full rounded-full bg-zinc-800 py-3 font-semibold text-white disabled:opacity-40 active:scale-95"
+          >
+            Sign out
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <p className="text-sm text-zinc-400">
+            Sign in to back up your scripts and sync them across devices. We'll email you a
+            one-time code — no password needed.
+          </p>
+          <input
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={stage === 'code'}
+            className="w-full rounded-xl bg-zinc-900 px-4 py-3 placeholder-zinc-500 outline-none disabled:opacity-60"
+          />
+          {stage === 'code' && (
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              placeholder="6-digit code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              className="w-full rounded-xl bg-zinc-900 px-4 py-3 text-center text-xl tracking-widest placeholder-zinc-500 outline-none"
+            />
+          )}
+          {stage === 'email' ? (
+            <button
+              type="button"
+              onClick={sendCode}
+              disabled={busy || !email.includes('@')}
+              className="w-full rounded-full bg-white py-3 font-semibold text-black disabled:opacity-40 active:scale-95"
+            >
+              {busy ? 'Sending…' : 'Send code'}
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={verifyCode}
+                disabled={busy || code.trim().length < 6}
+                className="w-full rounded-full bg-white py-3 font-semibold text-black disabled:opacity-40 active:scale-95"
+              >
+                {busy ? 'Verifying…' : 'Verify code'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setStage('email')
+                  setCode('')
+                  setMessage(null)
+                }}
+                className="w-full text-sm text-zinc-400 active:scale-95"
+              >
+                Use a different email
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {message && <p className="mt-4 text-center text-sm text-zinc-300">{message}</p>}
     </div>
   )
 }

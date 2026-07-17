@@ -16,6 +16,13 @@ Last updated: 2026-07-17
   - Cheap Bluetooth camera remotes and page-turner clickers pair as keyboards.
   - Space / Enter / → / PageDown: play–pause. ↑ / ← / PageUp: jump back. ↓: jump forward.
 
+- **Accounts + cloud sync (client side)**
+  - Supabase auth via email one-time code (PWA-friendly — no magic-link/Safari handoff).
+  - Local-first: localStorage stays the source of truth; saves/deletes write through to
+    the cloud when signed in; full merge (last-write-wins) on sign-in and "Sync now".
+  - Deletion tombstones so offline deletes don't resurrect on sync.
+  - App runs fully local when env vars are absent. Activation steps: README "Cloud sync setup".
+
 - **Script list + localStorage persistence**
   - Create, edit, delete, and title scripts.
   - All data stored in `localStorage`.
@@ -76,9 +83,7 @@ Last updated: 2026-07-17
 
 **Business context:** Freemium plan — first 3 scripts free, then pay for unlimited + cloud sync.
 
-**Blocker:** Needs backend (auth, storage, payments). Not built yet.
-
-**Decision:** Deferred until there is user demand or paid validation.
+**Status:** Client side shipped (see "Accounts + cloud sync" above). Needs a Supabase project + env vars to activate — see README "Cloud sync setup". Payments/free-tier enforcement still deferred until paid validation.
 
 ### 3. Remote control
 **Idea:** Use a second phone or a Bluetooth controller to pause/play/scroll while filming.
