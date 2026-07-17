@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { FilesetResolver, ImageSegmenter } from '@mediapipe/tasks-vision'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import {
@@ -20,6 +21,7 @@ interface Settings {
   margin: number
   focusBand: boolean
   focusMode: boolean
+  backgroundBlur: boolean
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -30,6 +32,7 @@ const DEFAULT_SETTINGS: Settings = {
   margin: 16,
   focusBand: true,
   focusMode: false,
+  backgroundBlur: false,
 }
 
 // Fades text away from the eye-level line (~45vh, where scrolling text enters)
@@ -142,11 +145,11 @@ export default function App() {
     if (session) void pushDeletion(id)
   }
 
-  function updateSettings(patch: Partial<Settings>) {
+  const updateSettings = useCallback((patch: Partial<Settings>) => {
     const next = { ...settings, ...patch }
     setSettings(next)
     saveSettings(next)
-  }
+  }, [settings])
 
   function startPrompting(script: Script) {
     setActiveScriptId(script.id)
@@ -222,6 +225,7 @@ function ScriptListView({
   onAccount: () => void
 }) {
   const [showSettings, setShowSettings] = useState(false)
+  const [showBetaBlurDialog, setShowBetaBlurDialog] = useState(false)
 
   return (
     <div className="flex h-full flex-col bg-zinc-950 p-4 pt-12">
@@ -326,6 +330,50 @@ function ScriptListView({
             />
             Focus mode (one line at a time)
           </label>
+          <label className="mt-2 flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={settings.backgroundBlur}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  setShowBetaBlurDialog(true)
+                } else {
+                  onUpdateSettings({ backgroundBlur: false })
+                }
+              }}
+            />
+            Background blur (Beta)
+          </label>
+        </div>
+      )}
+
+      {showBetaBlurDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6">
+          <div className="max-w-sm rounded-2xl bg-zinc-900 p-6 text-center">
+            <h3 className="mb-2 text-lg font-bold text-white">Beta: background blur</h3>
+            <p className="mb-4 text-sm text-zinc-300">
+              This feature uses AI to blur your background in real time. It may heat up your phone, reduce frame rate, or have rough edges around hair. Turn it off if performance drops.
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowBetaBlurDialog(false)
+                  onUpdateSettings({ backgroundBlur: true })
+                }}
+                className="rounded-full bg-sky-500 px-6 py-3 font-semibold text-white active:scale-95"
+              >
+                Enable anyway
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowBetaBlurDialog(false)}
+                className="rounded-full bg-zinc-800 px-6 py-3 font-semibold text-white active:scale-95"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -881,13 +929,18 @@ function PromptView({
   onBack: () => void
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
   const textRef = useRef<HTMLDivElement>(null)
+  const canvasStreamRef = useRef<MediaStream | null>(null)
+  const segmenterRef = useRef<ImageSegmenter | null>(null)
+  const segmenterReadyRef = useRef(false)
   const streamRef = useRef<MediaStream | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const recordedChunksRef = useRef<Blob[]>([])
   const startTimeRef = useRef<number>(0)
   const timerRef = useRef<number | null>(null)
   const progressRef = useRef(0)
+  const rafRef = useRef<number | null>(null)
 
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
   const [error, setError] = useState<string | null>(null)
@@ -912,7 +965,7 @@ function PromptView({
     setLoading(true)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
@@ -920,7 +973,19 @@ function PromptView({
         },
       })
       streamRef.current = stream
-      if (videoRef.current) videoRef.current.srcObject = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        videoRef.current.onloadedmetadata = () => {
+          const video = videoRef.current
+          const canvas = canvasRef.current
+          if (!video || !canvas) return
+          canvas.width = video.videoWidth || 1280
+          canvas.height = video.videoHeight || 720
+          if (settings.backgroundBlur) {
+            void initSegmenter()
+          }
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Camera/microphone access failed.')
     } finally {
@@ -928,13 +993,125 @@ function PromptView({
     }
   }
 
+  async function initSegmenter() {
+    if (segmenterReadyRef.current || segmenterRef.current) return
+    try {
+      const vision = await FilesetResolver.forVisionTasks(
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm',
+      )
+      segmenterRef.current = await ImageSegmenter.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: 'https://storage.googleapis.com/mediapipe-assets/deeplabv3.tflite?generation=1661875711618421',
+          delegate: 'GPU',
+        },
+        runningMode: 'VIDEO',
+        outputCategoryMask: true,
+        outputConfidenceMasks: false,
+      })
+      segmenterReadyRef.current = true
+    } catch (err) {
+      console.error('Failed to load background blur segmenter:', err)
+      setError('Background blur failed to load. Turn it off to continue.')
+    }
+  }
+
+  function renderFrame() {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    if (!video || !canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const drawPlain = () => {
+      ctx.filter = 'none'
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    }
+
+    const drawBlurred = async () => {
+      const segmenter = segmenterRef.current
+      if (!segmenter || video.readyState < 2) {
+        drawPlain()
+        return
+      }
+      try {
+        const result = segmenter.segmentForVideo(video, performance.now())
+        const mask = result.categoryMask
+        if (!mask) {
+          drawPlain()
+          return
+        }
+
+        // Convert MPMask (uint8) to ImageData
+        const maskData = mask.getAsUint8Array()
+        const maskImageData = new ImageData(mask.width, mask.height)
+        for (let i = 0; i < maskData.length; i++) {
+          const v = maskData[i] > 0 ? 255 : 0
+          maskImageData.data[i * 4] = v
+          maskImageData.data[i * 4 + 1] = v
+          maskImageData.data[i * 4 + 2] = v
+          maskImageData.data[i * 4 + 3] = 255
+        }
+
+        // Draw blurred background
+        ctx.filter = 'blur(16px)'
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+        // Cut out person with original sharp frame
+        ctx.save()
+        ctx.filter = 'none'
+        const maskCanvas = document.createElement('canvas')
+        maskCanvas.width = maskImageData.width
+        maskCanvas.height = maskImageData.height
+        const maskCtx = maskCanvas.getContext('2d')
+        if (maskCtx) {
+          maskCtx.putImageData(maskImageData, 0, 0)
+          ctx.drawImage(maskCanvas, 0, 0, canvas.width, canvas.height)
+          ctx.globalCompositeOperation = 'source-in'
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        }
+        ctx.restore()
+      } catch (err) {
+        drawPlain()
+      }
+    }
+
+    function tick() {
+      if (!settings.backgroundBlur) {
+        drawPlain()
+      } else {
+        void drawBlurred()
+      }
+      rafRef.current = requestAnimationFrame(tick)
+    }
+
+    tick()
+  }
+
   useEffect(() => {
     void startCamera()
     return () => {
       streamRef.current?.getTracks().forEach((track) => track.stop())
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facingMode])
+
+  useEffect(() => {
+    if (settings.backgroundBlur) {
+      void initSegmenter().then(() => {
+        if (videoRef.current && videoRef.current.readyState >= 2) {
+          renderFrame()
+        }
+      })
+    } else {
+      segmenterRef.current?.close()
+      segmenterRef.current = null
+      segmenterReadyRef.current = false
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+  }, [settings.backgroundBlur])
 
   // Keep the screen awake while prompting. iOS releases the lock whenever the
   // page is backgrounded, so re-request it on return.
@@ -1097,10 +1274,23 @@ function PromptView({
   }
 
   function startRecording() {
-    const stream = streamRef.current
+    let stream = streamRef.current
     if (!stream) {
       setError('Camera is not ready.')
       return
+    }
+
+    if (settings.backgroundBlur && canvasRef.current) {
+      canvasStreamRef.current?.getTracks().forEach((t) => t.stop())
+      canvasStreamRef.current = null
+      const canvasStream = canvasRef.current.captureStream(30)
+      // Add original audio track
+      const audioTrack = stream.getAudioTracks()[0]
+      if (audioTrack) {
+        canvasStream.addTrack(audioTrack)
+      }
+      canvasStreamRef.current = canvasStream
+      stream = canvasStream
     }
 
     recordedChunksRef.current = []
@@ -1168,6 +1358,8 @@ function PromptView({
 
   function stopRecording() {
     recorderRef.current?.stop()
+    canvasStreamRef.current?.getTracks().forEach((t) => t.stop())
+    canvasStreamRef.current = null
     setIsRecording(false)
     setIsPaused(false)
     setPlaying(false)
@@ -1226,6 +1418,11 @@ function PromptView({
         playsInline
         muted
         className="absolute inset-0 h-full w-full object-cover"
+        style={{ opacity: settings.backgroundBlur ? 0 : 1 }}
+      />
+      <canvas
+        ref={canvasRef}
+        className={`absolute inset-0 h-full w-full object-cover ${settings.mirror ? 'scale-x-[-1]' : ''}`}
       />
 
       <div
