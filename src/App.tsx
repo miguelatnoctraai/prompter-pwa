@@ -55,7 +55,7 @@ function App() {
         autoPlay
         playsInline
         muted
-        className="h-full w-full"
+        className="h-full w-full object-cover"
         aria-label="Camera preview"
       />
 
