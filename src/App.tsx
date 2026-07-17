@@ -393,7 +393,7 @@ function AccountView({
       setMessage(error.message)
     } else {
       setStage('code')
-      setMessage('Check your email for a 6-digit code.')
+      setMessage('Check your email for a login code.')
     }
   }
 
@@ -498,7 +498,7 @@ function AccountView({
               type="text"
               inputMode="numeric"
               autoComplete="one-time-code"
-              placeholder="6-digit code"
+              placeholder="Code from email"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               className="w-full rounded-xl bg-zinc-900 px-4 py-3 text-center text-xl tracking-widest placeholder-zinc-500 outline-none"
