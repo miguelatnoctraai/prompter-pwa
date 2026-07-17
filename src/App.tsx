@@ -828,44 +828,42 @@ function EditScriptView({
   )
 }
 
-function splitIntoChunks(text: string, maxWords = 10): string[] {
-  const words = text.trim().split(/\s+/).filter(Boolean)
-  if (!words.length) return []
+function splitIntoChunks(text: string, maxWords = 14): string[] {
+  const sentences = text
+    .trim()
+    .replace(/([.!?])\s+/g, '$1\n')
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean)
+
   const chunks: string[] = []
 
-  let i = 0
-  while (i < words.length) {
-    let end = Math.min(i + maxWords, words.length)
-    let bestEnd = end
-    let foundSplit = false
+  for (const sentence of sentences) {
+    const words = sentence.split(/\s+/).filter(Boolean)
 
-    // Prefer splitting at sentence/clause punctuation near the target word count.
-    for (let j = end - 1; j > i + 2; j--) {
-      const candidate = words.slice(i, j).join(' ')
-      if (/[.!?;,]$/.test(candidate)) {
-        bestEnd = j
-        foundSplit = true
-        break
-      }
+    // If the sentence is short enough, keep it whole.
+    if (words.length <= maxWords) {
+      chunks.push(sentence)
+      continue
     }
 
-    if (!foundSplit) {
-      // Fall back to splitting before a conjunction or preposition.
-      for (let j = end - 1; j > i + 2; j--) {
-        const word = words[j].toLowerCase().replace(/[^a-z0-9]/g, '')
-        if (
-          /^(but|and|so|because|which|that|or|then|when|where|who|whom|whose|if|unless|although|while|since|though|yet|however|therefore|moreover|furthermore|meanwhile|instead|otherwise|besides|also)$/i.test(word) ||
-          /^(about|like|over|under|after|before|between|through|during|above|below|around|near|off|into|onto|upon|within|across|behind|beyond|except|including|regarding|despite|toward|towards|among|against|until|unless|whether|once|whenever|wherever|with|without|for|from|to|of|in|on|at|by|plus)$/i.test(word)
-        ) {
+    // Long sentence: split on commas/semicolons near the target.
+    let start = 0
+    while (start < words.length) {
+      let end = Math.min(start + maxWords, words.length)
+      let bestEnd = end
+
+      for (let j = end - 1; j > start + 3; j--) {
+        const candidate = words.slice(start, j).join(' ')
+        if (/[,;]$/.test(candidate)) {
           bestEnd = j
-          foundSplit = true
           break
         }
       }
-    }
 
-    chunks.push(words.slice(i, bestEnd).join(' '))
-    i = bestEnd
+      chunks.push(words.slice(start, bestEnd).join(' '))
+      start = bestEnd
+    }
   }
 
   return chunks
@@ -1204,6 +1202,22 @@ function PromptView({
     return `${m}:${s}`
   }
 
+  const [touchStartX, setTouchStartX] = useState<number | null>(null)
+
+  function onTouchStart(e: React.TouchEvent) {
+    if (!settings.focusMode || !isRecording) return
+    setTouchStartX(e.changedTouches[0].clientX)
+  }
+
+  function onTouchEnd(e: React.TouchEvent) {
+    if (touchStartX == null || !settings.focusMode || !isRecording) return
+    const dx = e.changedTouches[0].clientX - touchStartX
+    if (dx < -40) {
+      nextChunk()
+    }
+    setTouchStartX(null)
+  }
+
   return (
     <div className="relative h-full w-full overflow-hidden bg-black">
       <video
@@ -1219,6 +1233,8 @@ function PromptView({
         onClick={() => {
           if (settings.focusMode && isRecording) nextChunk()
         }}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
         className={`no-scrollbar absolute inset-0 overflow-y-auto ${settings.mirror ? 'scale-x-[-1]' : ''} ${settings.focusMode ? 'flex items-center justify-center' : ''}`}
         style={{
           paddingTop: settings.focusMode ? undefined : '45vh',
@@ -1256,13 +1272,10 @@ function PromptView({
       </div>
 
       {settings.focusMode && isRecording && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-32 z-10 flex items-center justify-center gap-1">
-          {chunks.map((_, i) => (
-            <span
-              key={i}
-              className={`h-1.5 w-1.5 rounded-full transition-colors ${i === chunkIndex ? 'bg-white' : 'bg-white/30'}`}
-            />
-          ))}
+        <div className="pointer-events-none absolute inset-x-0 bottom-32 z-10 flex items-center justify-center">
+          <span className="rounded-full bg-black/50 px-4 py-1.5 text-sm font-semibold text-white backdrop-blur-sm">
+            {chunkIndex + 1} / {chunks.length}
+          </span>
         </div>
       )}
 
