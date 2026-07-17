@@ -904,10 +904,7 @@ function PromptView({
   const pausedAtRef = useRef<number | null>(null)
   const totalPausedMsRef = useRef(0)
 
-  const chunks = useMemo(() => {
-    const all = [script.hook, ...splitIntoChunks(script.body)].filter(Boolean)
-    return all
-  }, [script.hook, script.body])
+  const chunks = useMemo(() => splitIntoChunks(`${script.hook}\n${script.body}`.trim()), [script.hook, script.body])
   const [chunkIndex, setChunkIndex] = useState(0)
 
   async function startCamera() {
@@ -1235,7 +1232,7 @@ function PromptView({
       >
         {settings.focusMode ? (
           <p
-            className={`w-full whitespace-pre-wrap px-4 text-center font-semibold drop-shadow-lg ${chunkIndex === 0 ? 'text-amber-300' : 'text-white'}`}
+            className="w-full whitespace-pre-wrap px-4 text-center font-semibold text-white drop-shadow-lg"
             style={{
               fontSize: settings.fontSize,
               lineHeight: settings.lineHeight,
@@ -1251,9 +1248,7 @@ function PromptView({
               lineHeight: settings.lineHeight,
             }}
           >
-            {script.hook && (
-              <span className="block text-amber-300">{script.hook}</span>
-            )}
+            {script.hook && <span className="block">{script.hook}</span>}
             {script.hook && script.body && <br />}
             {script.body}
           </p>
