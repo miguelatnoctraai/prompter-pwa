@@ -1235,10 +1235,10 @@ function PromptView({
         }}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
-        className={`no-scrollbar absolute inset-0 overflow-y-auto ${settings.mirror ? 'scale-x-[-1]' : ''} ${settings.focusMode ? 'flex items-center justify-center' : ''}`}
+        className={`no-scrollbar absolute inset-0 overflow-y-auto ${settings.mirror ? 'scale-x-[-1]' : ''} ${settings.focusMode ? 'flex items-start justify-center pt-[18vh]' : ''}`}
         style={{
-          paddingTop: settings.focusMode ? undefined : '45vh',
-          paddingBottom: settings.focusMode ? undefined : '45vh',
+          paddingTop: settings.focusMode ? undefined : '18vh',
+          paddingBottom: '35vh',
           paddingLeft: settings.margin,
           paddingRight: settings.margin,
           ...(settings.focusBand && !settings.focusMode
@@ -1270,14 +1270,6 @@ function PromptView({
           </p>
         )}
       </div>
-
-      {settings.focusMode && isRecording && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-32 z-10 flex items-center justify-center">
-          <span className="rounded-full bg-black/50 px-4 py-1.5 text-sm font-semibold text-white backdrop-blur-sm">
-            {chunkIndex + 1} / {chunks.length}
-          </span>
-        </div>
-      )}
 
       {loading && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-white/80">
@@ -1331,7 +1323,7 @@ function PromptView({
       )}
 
       {isRecording && (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-center gap-2 p-4 pt-12">
+        <div className="pointer-events-none absolute inset-x-0 top-12 z-10 flex items-center justify-center gap-2 p-4">
           <span className={`h-3 w-3 rounded-full ${isPaused ? 'bg-yellow-500' : 'animate-pulse bg-red-500'}`} />
           <span className="rounded-md bg-black/40 px-2 py-1 font-mono text-sm text-white backdrop-blur-sm">
             {formatTime(elapsed)}
@@ -1370,7 +1362,19 @@ function PromptView({
           </button>
         </div>
       ) : (
-        <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/80 to-transparent p-4 pb-8">
+        <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-4 pb-10">
+          <div className="mb-3 flex items-center justify-center">
+            {isRecording && !settings.focusMode && (
+              <span className="rounded-full bg-black/50 px-4 py-1 text-sm font-semibold text-white backdrop-blur-sm">
+                {formatTime(elapsed)}
+              </span>
+            )}
+            {settings.focusMode && isRecording && (
+              <span className="rounded-full bg-black/50 px-4 py-1 text-sm font-semibold text-white backdrop-blur-sm">
+                {chunkIndex + 1} / {chunks.length}
+              </span>
+            )}
+          </div>
           <div className="flex items-center justify-center gap-3">
             {!isRecording && (
               <button
