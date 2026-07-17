@@ -749,9 +749,12 @@ function PromptView({
   const [playing, setPlaying] = useState(false)
   const [showControls, setShowControls] = useState(true)
   const [isRecording, setIsRecording] = useState(false)
+  const [isPaused, setIsPaused] = useState(false)
   const [countdown, setCountdown] = useState(0)
   const [elapsed, setElapsed] = useState(0)
   const [recordedUrl, setRecordedUrl] = useState<string | null>(null)
+  const pausedAtRef = useRef<number | null>(null)
+  const totalPausedMsRef = useRef(0)
 
   async function startCamera() {
     streamRef.current?.getTracks().forEach((track) => track.stop())
@@ -875,10 +878,10 @@ function PromptView({
   }, [playing, settings.speed])
 
   useEffect(() => {
-    if (isRecording && !recordedUrl) {
-      startTimeRef.current = Date.now()
+    if (isRecording && !recordedUrl && !isPaused) {
+      if (!startTimeRef.current) startTimeRef.current = Date.now() - totalPausedMsRef.current
       timerRef.current = window.setInterval(() => {
-        setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000))
+        setElapsed(Math.floor((Date.now() - startTimeRef.current! - totalPausedMsRef.current) / 1000))
       }, 1000)
     } else {
       if (timerRef.current) clearInterval(timerRef.current)
@@ -886,7 +889,7 @@ function PromptView({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
     }
-  }, [isRecording, recordedUrl])
+  }, [isRecording, recordedUrl, isPaused])
 
   function resetScroll() {
     progressRef.current = 0
@@ -898,10 +901,18 @@ function PromptView({
     setPlaying((p) => !p)
   }
 
+  function resetRecordingState() {
+    setElapsed(0)
+    setIsPaused(false)
+    startTimeRef.current = 0
+    totalPausedMsRef.current = 0
+    pausedAtRef.current = 0
+  }
+
   async function startRecordingWithCountdown() {
     resetScroll()
     setRecordedUrl(null)
-    setElapsed(0)
+    resetRecordingState()
     setCountdown(3)
     for (let i = 3; i > 0; i--) {
       setCountdown(i)
@@ -940,25 +951,51 @@ function PromptView({
         const url = URL.createObjectURL(blob)
         setRecordedUrl(url)
         setElapsed(0)
+        setIsRecording(false)
+        setIsPaused(false)
+        setPlaying(false)
+        startTimeRef.current = 0
+        totalPausedMsRef.current = 0
+        pausedAtRef.current = 0
       }
 
       recorder.onerror = () => {
         setError('Recording failed.')
         setIsRecording(false)
+        setIsPaused(false)
         setPlaying(false)
       }
 
       recorder.start(100)
       setIsRecording(true)
+      setIsPaused(false)
       setPlaying(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not start recording.')
     }
   }
 
+  function pauseRecording() {
+    recorderRef.current?.pause()
+    pausedAtRef.current = Date.now()
+    setIsPaused(true)
+    setPlaying(false)
+  }
+
+  function resumeRecording() {
+    if (pausedAtRef.current) {
+      totalPausedMsRef.current += Date.now() - pausedAtRef.current
+      pausedAtRef.current = null
+    }
+    recorderRef.current?.resume()
+    setIsPaused(false)
+    setPlaying(true)
+  }
+
   function stopRecording() {
     recorderRef.current?.stop()
     setIsRecording(false)
+    setIsPaused(false)
     setPlaying(false)
   }
 
@@ -1078,7 +1115,7 @@ function PromptView({
 
       {isRecording && (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-center gap-2 p-4 pt-12">
-          <span className="h-3 w-3 animate-pulse rounded-full bg-red-500" />
+          <span className={`h-3 w-3 rounded-full ${isPaused ? 'bg-yellow-500' : 'animate-pulse bg-red-500'}`} />
           <span className="rounded-md bg-black/40 px-2 py-1 font-mono text-sm text-white backdrop-blur-sm">
             {formatTime(elapsed)}
           </span>
@@ -1131,28 +1168,46 @@ function PromptView({
               </button>
             )}
 
-            {!isRecording ? (
-              <>
+            {isRecording ? (
+              isPaused ? (
                 <button
-                  onClick={togglePlay}
-                  className="rounded-full bg-white px-6 py-3 font-bold text-black shadow-lg active:scale-95"
+                  onClick={resumeRecording}
+                  className="flex items-center gap-2 rounded-full bg-white px-6 py-3 font-bold text-black shadow-lg active:scale-95"
                 >
-                  {playing ? 'Pause' : 'Play'}
+                  ▶ Resume
                 </button>
+              ) : (
                 <button
-                  onClick={startRecordingWithCountdown}
-                  className="flex items-center gap-2 rounded-full bg-red-500 px-6 py-3 font-bold text-white shadow-lg active:scale-95"
+                  onClick={pauseRecording}
+                  className="flex items-center gap-2 rounded-full bg-white px-6 py-3 font-bold text-black shadow-lg active:scale-95"
                 >
-                  <span className="h-3 w-3 rounded-full bg-white" />
-                  Record
+                  ⏸ Pause
                 </button>
-              </>
-            ) : (
+              )
+            ) : null}
+            {isRecording && (
               <button
                 onClick={stopRecording}
-                className="flex items-center gap-2 rounded-full bg-white px-6 py-3 font-bold text-black shadow-lg active:scale-95"
+                className="flex items-center gap-2 rounded-full bg-red-500 px-6 py-3 font-bold text-white shadow-lg active:scale-95"
               >
                 ■ Stop
+              </button>
+            )}
+            {!isRecording && (
+              <button
+                onClick={togglePlay}
+                className="rounded-full bg-white px-6 py-3 font-bold text-black shadow-lg active:scale-95"
+              >
+                {playing ? 'Pause' : 'Play'}
+              </button>
+            )}
+            {!isRecording && (
+              <button
+                onClick={startRecordingWithCountdown}
+                className="flex items-center gap-2 rounded-full bg-red-500 px-6 py-3 font-bold text-white shadow-lg active:scale-95"
+              >
+                <span className="h-3 w-3 rounded-full bg-white" />
+                Record
               </button>
             )}
 
