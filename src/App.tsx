@@ -789,27 +789,47 @@ function EditScriptView({
   )
 }
 
-function splitIntoChunks(text: string): string[] {
-  // Split on sentence terminators, then merge very short fragments with the next chunk.
-  const sentences = text
-    .replace(/([.!?])\s+/g, '$1\n')
-    .split('\n')
-    .map((s) => s.trim())
-    .filter(Boolean)
-
+function splitIntoChunks(text: string, maxWords = 10): string[] {
+  const words = text.trim().split(/\s+/).filter(Boolean)
+  if (!words.length) return []
   const chunks: string[] = []
-  let carry = ''
-  for (const sentence of sentences) {
-    const candidate = carry ? `${carry} ${sentence}` : sentence
-    if (candidate.split(/\s+/).length < 6) {
-      carry = candidate
-    } else {
-      chunks.push(candidate)
-      carry = ''
+
+  let i = 0
+  while (i < words.length) {
+    let end = Math.min(i + maxWords, words.length)
+    let bestEnd = end
+    let foundSplit = false
+
+    // Prefer splitting at sentence/clause punctuation near the target word count.
+    for (let j = end - 1; j > i + 2; j--) {
+      const candidate = words.slice(i, j).join(' ')
+      if (/[.!?;,]$/.test(candidate)) {
+        bestEnd = j
+        foundSplit = true
+        break
+      }
     }
+
+    if (!foundSplit) {
+      // Fall back to splitting before a conjunction or preposition.
+      for (let j = end - 1; j > i + 2; j--) {
+        const word = words[j].toLowerCase().replace(/[^a-z0-9]/g, '')
+        if (
+          /^(but|and|so|because|which|that|or|then|when|where|who|whom|whose|if|unless|although|while|since|though|yet|however|therefore|moreover|furthermore|meanwhile|instead|otherwise|besides|also)$/i.test(word) ||
+          /^(about|like|over|under|after|before|between|through|during|above|below|around|near|off|into|onto|upon|within|across|behind|beyond|except|including|regarding|despite|toward|towards|among|against|until|unless|whether|once|whenever|wherever|with|without|for|from|to|of|in|on|at|by|plus)$/i.test(word)
+        ) {
+          bestEnd = j
+          foundSplit = true
+          break
+        }
+      }
+    }
+
+    chunks.push(words.slice(i, bestEnd).join(' '))
+    i = bestEnd
   }
-  if (carry) chunks.push(carry)
-  return chunks.length ? chunks : [text]
+
+  return chunks
 }
 
 function PromptView({
