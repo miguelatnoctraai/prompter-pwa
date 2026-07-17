@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 // Vercel serverless function: POST /api/score-script { title, body }
 // Requires ANTHROPIC_API_KEY in the environment (Vercel project settings).
 
-const MAX_SCRIPT_CHARS = 12000
+const MAX_SCRIPT_CHARS = 8000
 
 const RESULT_SCHEMA = {
   type: 'object',
@@ -38,7 +38,7 @@ const RESULT_SCHEMA = {
     },
     rewrite_hook: {
       type: 'string',
-      description: 'A rewritten, stronger version of the opening line in the creator’s voice',
+      description: "A rewritten, stronger version of the opening line in the creator's voice",
     },
   },
 } as const
@@ -81,9 +81,8 @@ export default async function handler(
 
   try {
     const response = await client.messages.create({
-      model: 'claude-opus-4-8',
-      max_tokens: 16000,
-      thinking: { type: 'adaptive' },
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1024,
       system: SYSTEM_PROMPT,
       output_config: { format: { type: 'json_schema', schema: RESULT_SCHEMA } },
       messages: [

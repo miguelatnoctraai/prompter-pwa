@@ -899,6 +899,7 @@ function PromptView({
   }
 
   async function startRecordingWithCountdown() {
+    resetScroll()
     setRecordedUrl(null)
     setElapsed(0)
     setCountdown(3)
