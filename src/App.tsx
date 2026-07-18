@@ -39,10 +39,10 @@ const DEFAULT_SETTINGS: Settings = {
   autoCueCards: true,
 }
 
-// Fades text away from the eye-level line (~45vh, where scrolling text enters)
-// so the reader's gaze stays anchored near the camera.
+// Fades text below the top reading line so the reader's gaze stays anchored
+// near the camera (upper portion of the screen).
 const FOCUS_BAND_MASK =
-  'linear-gradient(to bottom, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.05) 32%, rgba(0,0,0,1) 44%, rgba(0,0,0,1) 56%, rgba(0,0,0,0.05) 68%, rgba(0,0,0,0.05) 100%)'
+  'linear-gradient(to bottom, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.05) 18%, rgba(0,0,0,1) 34%, rgba(0,0,0,1) 100%)'
 
 function loadSettings(): Settings {
   try {
