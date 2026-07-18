@@ -1098,6 +1098,10 @@ function PromptView({
   const startTimeRef = useRef<number>(0)
   const timerRef = useRef<number | null>(null)
   const progressRef = useRef(0)
+  // Long-press timer for stop: holding the Pause/Resume button for ~600ms
+  // prompts to stop the take, keeping the destructive action out of the
+  // quick-tap thumb path.
+  const stopPressTimer = useRef<number | null>(null)
   const rafRef = useRef<number | null>(null)
 
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
@@ -1274,6 +1278,7 @@ function PromptView({
     return () => {
       streamRef.current?.getTracks().forEach((track) => track.stop())
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      if (stopPressTimer.current) window.clearTimeout(stopPressTimer.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facingMode])
@@ -1569,6 +1574,25 @@ function PromptView({
     setPlaying(false)
   }
 
+  // Long-press the Pause/Resume button to stop. A quick tap stays a
+  // pause/resume; holding ~600ms triggers a confirm-to-stop so the
+  // destructive action can't be hit by accident in the thumb zone.
+  function beginStopPress() {
+    if (stopPressTimer.current) window.clearTimeout(stopPressTimer.current)
+    stopPressTimer.current = window.setTimeout(() => {
+      stopPressTimer.current = null
+      const ok = window.confirm('Stop and end this take?')
+      if (ok) stopRecording()
+    }, 600)
+  }
+
+  function cancelStopPress() {
+    if (stopPressTimer.current) {
+      window.clearTimeout(stopPressTimer.current)
+      stopPressTimer.current = null
+    }
+  }
+
   async function shareVideo() {
     if (!recordedUrl) return
     try {
@@ -1851,14 +1875,14 @@ function PromptView({
       ) : (
         <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-4 pb-10">
           <div className="mb-3 flex items-center justify-center">
-            {isRecording && !settings.focusMode && (
-              <span className="rounded-full bg-black/50 px-4 py-1 text-sm font-semibold text-white backdrop-blur-sm">
-                {formatTime(elapsed)}
-              </span>
-            )}
             {settings.focusMode && isRecording && (
               <span className="rounded-full bg-black/50 px-4 py-1 text-sm font-semibold text-white backdrop-blur-sm">
                 {chunkIndex + 1} / {chunks.length}
+              </span>
+            )}
+            {isRecording && (
+              <span className="rounded-full bg-black/30 px-3 py-1 text-xs text-white/70 backdrop-blur-sm">
+                Hold pause to stop
               </span>
             )}
           </div>
@@ -1894,6 +1918,11 @@ function PromptView({
               isPaused ? (
                 <button
                   onClick={resumeRecording}
+                  onTouchStart={beginStopPress}
+                  onTouchEnd={cancelStopPress}
+                  onMouseDown={beginStopPress}
+                  onMouseUp={cancelStopPress}
+                  onMouseLeave={cancelStopPress}
                   className="flex items-center gap-2 rounded-full bg-white px-6 py-3 font-bold text-black shadow-lg active:scale-95"
                 >
                   ▶ Resume
@@ -1901,20 +1930,17 @@ function PromptView({
               ) : (
                 <button
                   onClick={pauseRecording}
+                  onTouchStart={beginStopPress}
+                  onTouchEnd={cancelStopPress}
+                  onMouseDown={beginStopPress}
+                  onMouseUp={cancelStopPress}
+                  onMouseLeave={cancelStopPress}
                   className="flex items-center gap-2 rounded-full bg-white px-6 py-3 font-bold text-black shadow-lg active:scale-95"
                 >
                   ⏸ Pause
                 </button>
               )
             ) : null}
-            {isRecording && (
-              <button
-                onClick={stopRecording}
-                className="flex items-center gap-2 rounded-full bg-red-500 px-6 py-3 font-bold text-white shadow-lg active:scale-95"
-              >
-                ■ Stop
-              </button>
-            )}
             {!isRecording && (
               <button
                 onClick={settings.focusMode ? nextChunk : togglePlay}
