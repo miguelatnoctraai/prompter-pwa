@@ -1113,10 +1113,13 @@ function PromptView({
   const [isRecording, setIsRecording] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [countdown, setCountdown] = useState(0)
+  const [goSignal, setGoSignal] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [recordedUrl, setRecordedUrl] = useState<string | null>(null)
   const pausedAtRef = useRef<number | null>(null)
   const totalPausedMsRef = useRef(0)
+  // Lets the creator cancel during the 3-2-1 countdown by tapping anywhere.
+  const countdownCancelledRef = useRef(false)
 
   // AI cue cards (from the scoring endpoint) are preferred when present — they
   // break at natural spoken beats instead of the client-side regex. Falls back
@@ -1466,13 +1469,33 @@ function PromptView({
     resetScroll()
     setRecordedUrl(null)
     resetRecordingState()
-    setCountdown(3)
-    for (let i = 3; i > 0; i--) {
-      setCountdown(i)
-      await new Promise((res) => setTimeout(res, 1000))
+    countdownCancelledRef.current = false
+    // Accelerating cadence: 3 (1.0s) → 2 (0.8s) → 1 (0.6s), then a brief
+    // "Go" beat before recording starts. Predictable rhythm reduces the
+    // pre-take jitters; the creator can tap anywhere to cancel.
+    const cadence = [1000, 800, 600]
+    for (let i = 0; i < 3; i++) {
+      setCountdown(3 - i)
+      await new Promise((res) => setTimeout(res, cadence[i]))
+      if (countdownCancelledRef.current) {
+        setCountdown(0)
+        return
+      }
     }
     setCountdown(0)
+    setGoSignal(true)
+    await new Promise((res) => setTimeout(res, 400))
+    setGoSignal(false)
+    if (countdownCancelledRef.current) return
     startRecording()
+  }
+
+  function cancelCountdown() {
+    if (countdown > 0 || goSignal) {
+      countdownCancelledRef.current = true
+      setCountdown(0)
+      setGoSignal(false)
+    }
   }
 
   function startRecording() {
@@ -1757,9 +1780,34 @@ function PromptView({
           </button>
         </div>
       )}
+      {/* Countdown: a small bottom-center ring that scale-pulses each tick.
+          Camera + hook stay visible (no full-screen blackout). Tap anywhere
+          to cancel. A brief "Go" flash signals the start. */}
+      {(countdown > 0 || goSignal) && (
+        <div
+          className="absolute inset-0 z-20 flex items-end justify-center pb-28"
+          onClick={cancelCountdown}
+        >
+          {countdown > 0 ? (
+            <div
+              key={countdown}
+              className="ts-pop flex h-20 w-20 items-center justify-center rounded-full bg-black/50 text-5xl font-bold text-white backdrop-blur-md"
+            >
+              {countdown}
+            </div>
+          ) : (
+            <div
+              key="go"
+              className="ts-go text-4xl font-bold text-emerald-300 drop-shadow-lg"
+            >
+              Go
+            </div>
+          )}
+        </div>
+      )}
       {countdown > 0 && (
-        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/50 text-8xl font-bold text-white">
-          {countdown}
+        <div className="pointer-events-none absolute inset-x-0 bottom-16 z-20 text-center text-xs text-white/70">
+          Tap to cancel
         </div>
       )}
 
