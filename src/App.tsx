@@ -1011,7 +1011,8 @@ function PromptView({
       )
       segmenterRef.current = await ImageSegmenter.createFromOptions(vision, {
         baseOptions: {
-          modelAssetPath: 'https://storage.googleapis.com/mediapipe-assets/deeplabv3.tflite?generation=1661875711618421',
+          modelAssetPath:
+            'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite',
           delegate: 'GPU',
         },
         runningMode: 'VIDEO',
@@ -1052,34 +1053,39 @@ function PromptView({
           return
         }
 
-        // Convert MPMask (uint8) to ImageData
+        // Convert MPMask (uint8) to an alpha-only ImageData
         const maskData = mask.getAsUint8Array()
         const maskImageData = new ImageData(mask.width, mask.height)
         for (let i = 0; i < maskData.length; i++) {
-          const v = maskData[i] > 0 ? 255 : 0
-          maskImageData.data[i * 4] = v
-          maskImageData.data[i * 4 + 1] = v
-          maskImageData.data[i * 4 + 2] = v
-          maskImageData.data[i * 4 + 3] = 255
+          // Foreground confidence > 0.5 treated as fully opaque; smooth edges if supported.
+          const alpha = maskData[i] > 128 ? 255 : 0
+          maskImageData.data[i * 4 + 3] = alpha
         }
 
-        // Draw blurred background
+        // 1. Blurred background
         ctx.filter = 'blur(16px)'
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
 
-        // Cut out person with original sharp frame
-        ctx.save()
-        ctx.filter = 'none'
+        // 2. Mask the canvas to the person shape
         const maskCanvas = document.createElement('canvas')
         maskCanvas.width = maskImageData.width
         maskCanvas.height = maskImageData.height
         const maskCtx = maskCanvas.getContext('2d')
-        if (maskCtx) {
-          maskCtx.putImageData(maskImageData, 0, 0)
-          ctx.drawImage(maskCanvas, 0, 0, canvas.width, canvas.height)
-          ctx.globalCompositeOperation = 'source-in'
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        if (!maskCtx) {
+          ctx.filter = 'none'
+          drawPlain()
+          return
         }
+        maskCtx.putImageData(maskImageData, 0, 0)
+
+        ctx.save()
+        ctx.filter = 'none'
+        ctx.globalCompositeOperation = 'source-in'
+        ctx.drawImage(maskCanvas, 0, 0, canvas.width, canvas.height)
+
+        // 3. Paint sharp foreground over the blurred person region
+        ctx.globalCompositeOperation = 'source-over'
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
         ctx.restore()
       } catch (err) {
         drawPlain()
