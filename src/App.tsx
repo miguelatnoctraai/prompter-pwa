@@ -42,8 +42,8 @@ const DEFAULT_SETTINGS: Settings = {
 // Fades text below the active reading area. The sharp zone starts at the actual
 // script text baseline (card top + padding) and fades quickly below it.
 function focusBandMask(textTopVh: number) {
-  const sharpEnd = textTopVh + 10
-  const fadeEnd = textTopVh + 22
+  const sharpEnd = textTopVh + 20
+  const fadeEnd = textTopVh + 34
   return `linear-gradient(to bottom, rgba(0,0,0,0.02) 0%, rgba(0,0,0,0.02) ${textTopVh}%, rgba(0,0,0,1) ${textTopVh}%, rgba(0,0,0,1) ${sharpEnd}%, rgba(0,0,0,0.02) ${fadeEnd}%, rgba(0,0,0,0.02) 100%)`
 }
 
