@@ -787,6 +787,15 @@ function EditScriptView({
   // fallback and is what applyRewrite updates.
   const [pendingCueCards, setPendingCueCards] = useState<string[] | null>(null)
 
+  // Rewrite preview + undo. "Preview rewrite" swaps the editor into a
+  // read-only view of the proposed hook + body; the creator then chooses
+  // "Use rewrite" or "Keep mine". After using the rewrite, a 5-second undo
+  // toast restores the original text if they change their mind.
+  const [previewing, setPreviewing] = useState(false)
+  const [applied, setApplied] = useState(false)
+  const [undo, setUndo] = useState<{ hook: string; body: string } | null>(null)
+  const undoTimerRef = useRef<number | null>(null)
+
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0
   // ~150 spoken words per minute is a natural short-form pace.
   const readSeconds = Math.round((wordCount / 150) * 60)
@@ -827,18 +836,58 @@ function EditScriptView({
     }
   }
 
-  async function applyRewrite() {
+  function previewRewrite() {
     if (!score) return
+    setPreviewing(true)
+  }
+
+  function keepMine() {
+    setPreviewing(false)
+  }
+
+  function useRewrite() {
+    if (!score) return
+    // Stash the originals so a 5s undo can restore them.
+    setUndo({ hook, body })
     onHookChange(score.rewrite_hook)
     onBodyChange(score.rewrite_body)
-    // Swap the persisted cue cards to the rewrite's breakdown so Focus mode
-    // follows the rewritten script, not the original.
     setPendingCueCards(score.rewrite_cue_cards)
     if (activeScript && score.rewrite_cue_cards && score.rewrite_cue_cards.length > 0) {
       onPersistCueCards(score.rewrite_cue_cards)
     }
-    setScore(null)
+    setPreviewing(false)
+    setApplied(true)
+    // Keep the score panel visible (annotated "Applied") so the creator
+    // still sees why they accepted — do NOT null the score.
+    if (undoTimerRef.current) window.clearTimeout(undoTimerRef.current)
+    undoTimerRef.current = window.setTimeout(() => {
+      setUndo(null)
+      undoTimerRef.current = null
+    }, 5000)
   }
+
+  function undoRewrite() {
+    if (!undo) return
+    onHookChange(undo.hook)
+    onBodyChange(undo.body)
+    // The rewrite's cue cards no longer match — clear them so Focus mode
+    // falls back to the regex splitter for the original text.
+    setPendingCueCards(null)
+    onClearCueCards()
+    setUndo(null)
+    setApplied(false)
+    if (undoTimerRef.current) {
+      window.clearTimeout(undoTimerRef.current)
+      undoTimerRef.current = null
+    }
+  }
+
+  // Clear the undo timer if the component unmounts mid-countdown.
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) window.clearTimeout(undoTimerRef.current)
+    }
+  }, [])
 
   return (
     <div className="flex h-full flex-col bg-zinc-950 p-4 pt-12">
@@ -861,9 +910,12 @@ function EditScriptView({
         value={hook}
         onChange={(e) => {
           onHookChange(e.target.value)
-          // Editing the script invalidates any AI cue cards we persisted.
+          // Editing the script invalidates any AI cue cards we persisted,
+          // and clears the "Applied" badge + undo from a prior rewrite.
           setPendingCueCards(null)
           onClearCueCards()
+          setApplied(false)
+          setUndo(null)
         }}
         className="mb-3 rounded-xl border border-amber-500/30 bg-zinc-900 px-4 py-3 text-lg font-semibold text-amber-100 placeholder-amber-500/50 outline-none"
       />
@@ -874,6 +926,8 @@ function EditScriptView({
           onBodyChange(e.target.value)
           setPendingCueCards(null)
           onClearCueCards()
+          setApplied(false)
+          setUndo(null)
         }}
         className="flex-1 resize-none rounded-xl bg-zinc-900 p-4 text-base leading-relaxed placeholder-zinc-500 outline-none"
       />
@@ -938,25 +992,87 @@ function EditScriptView({
           )}
           {(score.rewrite_hook || score.rewrite_body) && (
             <div className="mb-2">
-              <p className="text-xs font-semibold text-sky-400">AI rewrite</p>
-              {score.rewrite_hook && (
-                <p className="mb-1 text-sm italic text-zinc-300">“{score.rewrite_hook}”</p>
+              <div className="mb-2 flex items-center gap-2">
+                <p className="text-xs font-semibold text-sky-400">AI rewrite</p>
+                {applied && (
+                  <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                    Applied ✓
+                  </span>
+                )}
+              </div>
+
+              {previewing ? (
+                <div className="mb-2 rounded-xl border border-sky-500/30 bg-sky-500/5 p-3">
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-sky-300/80">
+                    New hook
+                  </p>
+                  {score.rewrite_hook && (
+                    <p className="mb-2 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-amber-100">
+                      {score.rewrite_hook}
+                    </p>
+                  )}
+                  {score.rewrite_body && (
+                    <>
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-sky-300/80">
+                        New body
+                      </p>
+                      <div className="max-h-48 overflow-y-auto rounded-lg bg-zinc-900 px-3 py-2 text-sm text-zinc-200">
+                        <p className="whitespace-pre-wrap">{score.rewrite_body}</p>
+                      </div>
+                    </>
+                  )}
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={keepMine}
+                      className="flex-1 rounded-full bg-zinc-800 py-2 text-sm font-semibold text-white active:scale-95"
+                    >
+                      Keep mine
+                    </button>
+                    <button
+                      type="button"
+                      onClick={useRewrite}
+                      className="flex-1 rounded-full bg-sky-500 py-2 text-sm font-semibold text-white active:scale-95"
+                    >
+                      Use rewrite
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {score.rewrite_hook && !applied && (
+                    <p className="mb-1 text-sm italic text-zinc-300">“{score.rewrite_hook}”</p>
+                  )}
+                  {!applied && (
+                    <button
+                      type="button"
+                      onClick={previewRewrite}
+                      className="mt-2 w-full rounded-full bg-sky-500 py-2 text-sm font-semibold text-white active:scale-95"
+                    >
+                      Preview rewrite
+                    </button>
+                  )}
+                </>
               )}
-              {score.rewrite_body && score.rewrite_body !== body && (
-                <p className="text-sm text-zinc-400">Body rewritten. Tap Apply to preview.</p>
-              )}
-              <button
-                type="button"
-                onClick={applyRewrite}
-                className="mt-2 w-full rounded-full bg-sky-500 py-2 text-sm font-semibold text-white active:scale-95"
-              >
-                Apply rewrite
-              </button>
             </div>
           )}
         </div>
       )}
       {scoreError && <p className="mt-2 text-center text-sm text-red-400">{scoreError}</p>}
+
+      {/* Undo toast: shows for 5s after applying a rewrite. */}
+      {undo && (
+        <div className="mt-3 flex items-center justify-between rounded-xl bg-zinc-800 px-4 py-3">
+          <span className="text-sm text-zinc-200">Rewrite applied</span>
+          <button
+            type="button"
+            onClick={undoRewrite}
+            className="rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-black active:scale-95"
+          >
+            Undo
+          </button>
+        </div>
+      )}
 
       <div className="mt-4 flex gap-3">
         <button
@@ -1086,6 +1202,7 @@ function PromptView({
   onBack: () => void
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const reviewVideoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const textRef = useRef<HTMLDivElement>(null)
   const canvasStreamRef = useRef<MediaStream | null>(null)
@@ -1097,6 +1214,10 @@ function PromptView({
   const startTimeRef = useRef<number>(0)
   const timerRef = useRef<number | null>(null)
   const progressRef = useRef(0)
+  // Long-press timer for stop: holding the Pause/Resume button for ~600ms
+  // prompts to stop the take, keeping the destructive action out of the
+  // quick-tap thumb path.
+  const stopPressTimer = useRef<number | null>(null)
   const rafRef = useRef<number | null>(null)
 
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
@@ -1108,10 +1229,13 @@ function PromptView({
   const [isRecording, setIsRecording] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [countdown, setCountdown] = useState(0)
+  const [goSignal, setGoSignal] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [recordedUrl, setRecordedUrl] = useState<string | null>(null)
   const pausedAtRef = useRef<number | null>(null)
   const totalPausedMsRef = useRef(0)
+  // Lets the creator cancel during the 3-2-1 countdown by tapping anywhere.
+  const countdownCancelledRef = useRef(false)
 
   // AI cue cards (from the scoring endpoint) are preferred when present — they
   // break at natural spoken beats instead of the client-side regex. Falls back
@@ -1273,6 +1397,7 @@ function PromptView({
     return () => {
       streamRef.current?.getTracks().forEach((track) => track.stop())
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      if (stopPressTimer.current) window.clearTimeout(stopPressTimer.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facingMode])
@@ -1460,13 +1585,33 @@ function PromptView({
     resetScroll()
     setRecordedUrl(null)
     resetRecordingState()
-    setCountdown(3)
-    for (let i = 3; i > 0; i--) {
-      setCountdown(i)
-      await new Promise((res) => setTimeout(res, 1000))
+    countdownCancelledRef.current = false
+    // Accelerating cadence: 3 (1.0s) → 2 (0.8s) → 1 (0.6s), then a brief
+    // "Go" beat before recording starts. Predictable rhythm reduces the
+    // pre-take jitters; the creator can tap anywhere to cancel.
+    const cadence = [1000, 800, 600]
+    for (let i = 0; i < 3; i++) {
+      setCountdown(3 - i)
+      await new Promise((res) => setTimeout(res, cadence[i]))
+      if (countdownCancelledRef.current) {
+        setCountdown(0)
+        return
+      }
     }
     setCountdown(0)
+    setGoSignal(true)
+    await new Promise((res) => setTimeout(res, 400))
+    setGoSignal(false)
+    if (countdownCancelledRef.current) return
     startRecording()
+  }
+
+  function cancelCountdown() {
+    if (countdown > 0 || goSignal) {
+      countdownCancelledRef.current = true
+      setCountdown(0)
+      setGoSignal(false)
+    }
   }
 
   function startRecording() {
@@ -1568,6 +1713,25 @@ function PromptView({
     setPlaying(false)
   }
 
+  // Long-press the Pause/Resume button to stop. A quick tap stays a
+  // pause/resume; holding ~600ms triggers a confirm-to-stop so the
+  // destructive action can't be hit by accident in the thumb zone.
+  function beginStopPress() {
+    if (stopPressTimer.current) window.clearTimeout(stopPressTimer.current)
+    stopPressTimer.current = window.setTimeout(() => {
+      stopPressTimer.current = null
+      const ok = window.confirm('Stop and end this take?')
+      if (ok) stopRecording()
+    }, 600)
+  }
+
+  function cancelStopPress() {
+    if (stopPressTimer.current) {
+      window.clearTimeout(stopPressTimer.current)
+      stopPressTimer.current = null
+    }
+  }
+
   async function shareVideo() {
     if (!recordedUrl) return
     try {
@@ -1587,6 +1751,15 @@ function PromptView({
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not share video.')
     }
+  }
+
+  // Leave the review screen (Retake or Back): pause the review video and
+  // release its object URL so repeated takes don't leak blob memory.
+  function discardRecording() {
+    reviewVideoRef.current?.pause()
+    if (recordedUrl) URL.revokeObjectURL(recordedUrl)
+    setRecordedUrl(null)
+    resetScroll()
   }
 
   function formatTime(totalSeconds: number) {
@@ -1723,9 +1896,34 @@ function PromptView({
           </button>
         </div>
       )}
+      {/* Countdown: a small bottom-center ring that scale-pulses each tick.
+          Camera + hook stay visible (no full-screen blackout). Tap anywhere
+          to cancel. A brief "Go" flash signals the start. */}
+      {(countdown > 0 || goSignal) && (
+        <div
+          className="absolute inset-0 z-20 flex items-end justify-center pb-28"
+          onClick={cancelCountdown}
+        >
+          {countdown > 0 ? (
+            <div
+              key={countdown}
+              className="ts-pop flex h-20 w-20 items-center justify-center rounded-full bg-black/50 text-5xl font-bold text-white backdrop-blur-md"
+            >
+              {countdown}
+            </div>
+          ) : (
+            <div
+              key="go"
+              className="ts-go text-4xl font-bold text-emerald-300 drop-shadow-lg"
+            >
+              Go
+            </div>
+          )}
+        </div>
+      )}
       {countdown > 0 && (
-        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/50 text-8xl font-bold text-white">
-          {countdown}
+        <div className="pointer-events-none absolute inset-x-0 bottom-16 z-20 text-center text-xs text-white/70">
+          Tap to cancel
         </div>
       )}
 
@@ -1780,46 +1978,75 @@ function PromptView({
       )}
 
       {recordedUrl ? (
-        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-black/90 p-6 text-center text-white">
-          <p className="text-lg font-semibold">Recording complete</p>
-          <p className="text-sm text-zinc-300">
-            Tap Share to save to Photos, or Retake to record again.
-          </p>
-          <div className="flex items-center gap-3">
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-end bg-black/40 text-white">
+          {/* Recorded clip plays back as the background so the creator can
+              see themselves before deciding Retake vs Share. */}
+          <video
+            ref={reviewVideoRef}
+            src={recordedUrl}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          {/* Legibility gradient behind the controls (bottom thumb zone). */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/90 via-black/50 to-transparent" />
+
+          {/* Replay affordance, top-center, out of the thumb zone. */}
+          <button
+            type="button"
+            onClick={() => {
+              const v = reviewVideoRef.current
+              if (v) {
+                v.currentTime = 0
+                void v.play().catch(() => {})
+              }
+            }}
+            className="absolute left-1/2 top-12 z-10 -translate-x-1/2 rounded-full bg-white/20 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm active:scale-95"
+            aria-label="Replay recording"
+          >
+            ↻ Replay
+          </button>
+
+          <div className="relative z-10 w-full max-w-sm px-6 pb-10 text-center">
+            <p className="mb-1 text-lg font-semibold drop-shadow-lg">How did it look?</p>
+            <p className="mb-4 text-sm text-zinc-300 drop-shadow">
+              Save it, or take it again.
+            </p>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={discardRecording}
+                className="rounded-full bg-zinc-800 px-6 py-3 font-semibold text-white active:scale-95"
+              >
+                Retake
+              </button>
+              <button
+                onClick={shareVideo}
+                className="rounded-full bg-white px-6 py-3 font-semibold text-black active:scale-95"
+              >
+                Share video
+              </button>
+            </div>
             <button
-              onClick={() => {
-                setRecordedUrl(null)
-                resetScroll()
-              }}
-              className="rounded-full bg-zinc-800 px-6 py-3 font-semibold text-white active:scale-95"
+              onClick={discardRecording}
+              className="mt-3 text-sm text-zinc-300 active:scale-95"
             >
-              Retake
-            </button>
-            <button
-              onClick={shareVideo}
-              className="rounded-full bg-white px-6 py-3 font-semibold text-black active:scale-95"
-            >
-              Share video
+              Back to scripts
             </button>
           </div>
-          <button
-            onClick={onBack}
-            className="mt-2 text-sm text-zinc-400 active:scale-95"
-          >
-            Back to scripts
-          </button>
         </div>
       ) : (
         <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-4 pb-10">
           <div className="mb-3 flex items-center justify-center">
-            {isRecording && !settings.focusMode && (
-              <span className="rounded-full bg-black/50 px-4 py-1 text-sm font-semibold text-white backdrop-blur-sm">
-                {formatTime(elapsed)}
-              </span>
-            )}
             {settings.focusMode && isRecording && (
               <span className="rounded-full bg-black/50 px-4 py-1 text-sm font-semibold text-white backdrop-blur-sm">
                 {chunkIndex + 1} / {chunks.length}
+              </span>
+            )}
+            {isRecording && (
+              <span className="rounded-full bg-black/30 px-3 py-1 text-xs text-white/70 backdrop-blur-sm">
+                Hold pause to stop
               </span>
             )}
           </div>
@@ -1855,6 +2082,11 @@ function PromptView({
               isPaused ? (
                 <button
                   onClick={resumeRecording}
+                  onTouchStart={beginStopPress}
+                  onTouchEnd={cancelStopPress}
+                  onMouseDown={beginStopPress}
+                  onMouseUp={cancelStopPress}
+                  onMouseLeave={cancelStopPress}
                   className="flex items-center gap-2 rounded-full bg-white px-6 py-3 font-bold text-black shadow-lg active:scale-95"
                 >
                   ▶ Resume
@@ -1862,20 +2094,17 @@ function PromptView({
               ) : (
                 <button
                   onClick={pauseRecording}
+                  onTouchStart={beginStopPress}
+                  onTouchEnd={cancelStopPress}
+                  onMouseDown={beginStopPress}
+                  onMouseUp={cancelStopPress}
+                  onMouseLeave={cancelStopPress}
                   className="flex items-center gap-2 rounded-full bg-white px-6 py-3 font-bold text-black shadow-lg active:scale-95"
                 >
                   ⏸ Pause
                 </button>
               )
             ) : null}
-            {isRecording && (
-              <button
-                onClick={stopRecording}
-                className="flex items-center gap-2 rounded-full bg-red-500 px-6 py-3 font-bold text-white shadow-lg active:scale-95"
-              >
-                ■ Stop
-              </button>
-            )}
             {!isRecording && (
               <button
                 onClick={settings.focusMode ? nextChunk : togglePlay}
