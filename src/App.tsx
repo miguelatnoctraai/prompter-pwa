@@ -982,7 +982,9 @@ function PromptView({
           canvas.width = video.videoWidth || 1280
           canvas.height = video.videoHeight || 720
           if (settings.backgroundBlur) {
-            void initSegmenter()
+            void initSegmenter().then(() => renderFrame())
+          } else {
+            renderFrame()
           }
         }
       }
@@ -1099,17 +1101,27 @@ function PromptView({
 
   useEffect(() => {
     if (settings.backgroundBlur) {
-      void initSegmenter().then(() => {
-        if (videoRef.current && videoRef.current.readyState >= 2) {
-          renderFrame()
-        }
-      })
+      if (segmenterReadyRef.current) {
+        renderFrame()
+      } else {
+        void initSegmenter().then(() => renderFrame())
+      }
     } else {
       segmenterRef.current?.close()
       segmenterRef.current = null
       segmenterReadyRef.current = false
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
       rafRef.current = null
+      // Draw plain video on the canvas so recording without blur still works
+      const video = videoRef.current
+      const canvas = canvasRef.current
+      if (video && canvas) {
+        const ctx = canvas.getContext('2d')
+        if (ctx) {
+          ctx.filter = 'none'
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        }
+      }
     }
   }, [settings.backgroundBlur])
 
@@ -1283,6 +1295,13 @@ function PromptView({
     if (settings.backgroundBlur && canvasRef.current) {
       canvasStreamRef.current?.getTracks().forEach((t) => t.stop())
       canvasStreamRef.current = null
+      // Ensure canvas has a rendered frame before capturing
+      const captureCanvas = canvasRef.current
+      const captureCtx = captureCanvas.getContext('2d')
+      if (captureCtx && videoRef.current) {
+        captureCtx.filter = 'none'
+        captureCtx.drawImage(videoRef.current, 0, 0, captureCanvas.width, captureCanvas.height)
+      }
       const canvasStream = canvasRef.current.captureStream(30)
       // Add original audio track
       const audioTrack = stream.getAudioTracks()[0]
