@@ -4,6 +4,7 @@ create table public.scripts (
   id uuid primary key,
   user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
   title text not null,
+  hook text not null default '',
   body text not null,
   -- Millisecond timestamps, matching the app's Date.now() values.
   created_at bigint not null,

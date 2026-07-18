@@ -8,7 +8,7 @@ const MAX_SCRIPT_CHARS = 8000
 const RESULT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['scores', 'estimated_seconds', 'strengths', 'suggestions', 'rewrite_hook'],
+  required: ['scores', 'estimated_seconds', 'strengths', 'suggestions', 'rewrite_hook', 'cue_cards', 'rewrite_cue_cards'],
   properties: {
     scores: {
       type: 'object',
@@ -44,6 +44,16 @@ const RESULT_SCHEMA = {
       type: 'string',
       description: "A rewritten version of the rest of the script, preserving the creator's voice and the same core message. Return only the spoken lines, not stage directions or labels.",
     },
+    cue_cards: {
+      type: 'array',
+      description: "The creator's ORIGINAL script (the hook + body they submitted, NOT the rewrite) broken into natural teleprompter cue cards for spoken delivery. Card 0 is ALWAYS the hook as a single complete card — never split it, even if it is long. Each subsequent card is one spoken beat: 4-16 words, breaking at natural breath, pause, or idea boundaries. Preserve the creator's original wording exactly. Do not include the rewrite in the cue cards.",
+      items: { type: 'string' },
+    },
+    rewrite_cue_cards: {
+      type: 'array',
+      description: "Your REWRITE (rewrite_hook + rewrite_body) broken into natural teleprompter cue cards using the same rules: card 0 is ALWAYS rewrite_hook as a single complete card, each subsequent card is one spoken beat of 4-16 words. Preserve the rewrite's wording exactly.",
+      items: { type: 'string' },
+    },
   },
 }
 
@@ -51,7 +61,11 @@ const SYSTEM_PROMPT = `You are a short-form video script coach. Creators paste t
 
 Judge for the medium: the first 1-2 seconds decide whether viewers scroll past, spoken language beats written language, one idea per video, and the ending should tell the viewer what to do next. Be honest — a mediocre script should score 4-6, not 8. Suggestions must be specific to this script (quote or reference its actual lines), never generic advice.
 
-If the user provides a separate hook and body, score the hook separately from the body and use them together as the full script when judging clarity, pacing, and overall. When rewriting, return a stronger hook AND a rewritten body that keeps the creator's voice and message.`
+If the user provides a separate hook and body, score the hook separately from the body and use them together as the full script when judging clarity, pacing, and overall. When rewriting, return a stronger hook AND a rewritten body that keeps the creator's voice and message.
+
+Also break the creator's original script (the hook + body they submitted, NOT your rewrite) into natural teleprompter cue cards for spoken delivery. The first card is ALWAYS the hook as a single complete card — never split it, even if it is long. Each subsequent card is one spoken beat: 4-16 words, breaking at natural breath, pause, or idea boundaries. Preserve the creator's original wording in the cue cards. Do not include the rewrite in the cue cards.
+
+Break your REWRITE into rewrite_cue_cards using the same rules: card 0 is ALWAYS the rewrite_hook as a single complete card, each subsequent card is one spoken beat of 4-16 words. This lets the creator use AI cue cards whether or not they apply the rewrite.`
 
 export default async function handler(
   req: { method?: string; body?: { title?: unknown; hook?: unknown; body?: unknown } },
@@ -90,7 +104,7 @@ export default async function handler(
   try {
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
+      max_tokens: 2048,
       system: SYSTEM_PROMPT,
       output_config: { format: { type: 'json_schema', schema: RESULT_SCHEMA } },
       messages: [

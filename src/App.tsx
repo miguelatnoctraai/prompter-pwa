@@ -109,7 +109,7 @@ export default function App() {
     setView('edit')
   }
 
-  function saveScript() {
+  function saveScript(cueCards?: string[] | null) {
     const trimmedTitle = title.trim() || 'Untitled script'
     const trimmedHook = hook.trim()
     const trimmedBody = body.trim()
@@ -119,7 +119,18 @@ export default function App() {
     let nextScripts: Script[]
     if (activeScript) {
       nextScripts = scripts.map((s) =>
-        s.id === activeScript.id ? { ...s, title: trimmedTitle, hook: trimmedHook, body: trimmedBody, updatedAt: now } : s,
+        s.id === activeScript.id
+          ? {
+              ...s,
+              title: trimmedTitle,
+              hook: trimmedHook,
+              body: trimmedBody,
+              // Preserve AI cue cards already persisted during scoring, or
+              // adopt the pending ones from a just-scored new script.
+              cueCards: cueCards && cueCards.length > 0 ? cueCards : s.cueCards,
+              updatedAt: now,
+            }
+          : s,
       )
     } else {
       const newScript: Script = {
@@ -127,6 +138,7 @@ export default function App() {
         title: trimmedTitle,
         hook: trimmedHook,
         body: trimmedBody,
+        cueCards: cueCards && cueCards.length > 0 ? cueCards : undefined,
         createdAt: now,
         updatedAt: now,
       }
@@ -150,6 +162,39 @@ export default function App() {
     saveScripts(next)
     addTombstone(id)
     if (session) void pushDeletion(id)
+  }
+
+  // Persist AI cue cards onto an existing script (from the scoring endpoint).
+  // Writes through to localStorage immediately so Focus mode can use them on
+  // the next prompt. Not synced to Supabase (no DB column); re-scoring on
+  // another device regenerates them. Pass an empty array to clear stale cards
+  // after the script text is edited.
+  function persistCueCards(id: string | undefined, cards: string[]) {
+    if (!id) return
+    const nextScripts = scripts.map((s) =>
+      s.id === id
+        ? { ...s, cueCards: cards.length > 0 ? cards : undefined, updatedAt: Date.now() }
+        : s,
+    )
+    setScripts(nextScripts)
+    saveScripts(nextScripts)
+    if (session) {
+      const saved = nextScripts.find((s) => s.id === id)
+      if (saved) void pushScript(saved)
+    }
+  }
+
+  // Lightweight clear of stale AI cue cards when the creator edits the hook or
+  // body after scoring. Only touches local state + localStorage — does not
+  // bump updatedAt or push to Supabase (the text edit itself will save+sync
+  // normally on Save).
+  function clearCueCards(id: string | undefined) {
+    if (!id) return
+    const nextScripts = scripts.map((s) =>
+      s.id === id && s.cueCards ? { ...s, cueCards: undefined } : s,
+    )
+    setScripts(nextScripts)
+    saveScripts(nextScripts)
   }
 
   const updateSettings = useCallback((patch: Partial<Settings>) => {
@@ -191,11 +236,14 @@ export default function App() {
           hook={hook}
           body={body}
           isNew={!activeScript}
+          activeScript={activeScript}
           onTitleChange={setTitle}
           onHookChange={setHook}
           onBodyChange={setBody}
           onSave={saveScript}
           onCancel={() => setView('list')}
+          onPersistCueCards={(cards) => persistCueCards(activeScript?.id, cards)}
+          onClearCueCards={() => clearCueCards(activeScript?.id)}
         />
       )}
       {view === 'prompt' && activeScript && (
@@ -699,6 +747,8 @@ interface ScriptScore {
   suggestions: string[]
   rewrite_hook: string
   rewrite_body: string
+  cue_cards: string[]
+  rewrite_cue_cards: string[]
 }
 
 function EditScriptView({
@@ -706,25 +756,36 @@ function EditScriptView({
   hook,
   body,
   isNew,
+  activeScript,
   onTitleChange,
   onHookChange,
   onBodyChange,
   onSave,
   onCancel,
+  onPersistCueCards,
+  onClearCueCards,
 }: {
   title: string
   hook: string
   body: string
   isNew: boolean
+  activeScript: Script | null
   onTitleChange: (v: string) => void
   onHookChange: (v: string) => void
   onBodyChange: (v: string) => void
-  onSave: () => void
+  onSave: (cueCards?: string[] | null) => void
   onCancel: () => void
+  onPersistCueCards: (cards: string[]) => void
+  onClearCueCards: () => void
 }) {
   const [score, setScore] = useState<ScriptScore | null>(null)
   const [scoring, setScoring] = useState(false)
   const [scoreError, setScoreError] = useState<string | null>(null)
+  // For a brand-new (not-yet-saved) script there is no id to persist cue cards
+  // against, so hold them here and attach them on save. For existing scripts
+  // we persist immediately via onPersistCueCards; this stays in sync as a
+  // fallback and is what applyRewrite updates.
+  const [pendingCueCards, setPendingCueCards] = useState<string[] | null>(null)
 
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0
   // ~150 spoken words per minute is a natural short-form pace.
@@ -751,7 +812,14 @@ function EditScriptView({
         setScoreError(message)
         return
       }
-      setScore((await resp.json()) as ScriptScore)
+      const result = (await resp.json()) as ScriptScore
+      setScore(result)
+      setPendingCueCards(result.cue_cards)
+      // Persist the AI cue cards for the ORIGINAL script so Focus mode can use
+      // them immediately, even if the creator never applies the rewrite.
+      if (activeScript && result.cue_cards && result.cue_cards.length > 0) {
+        onPersistCueCards(result.cue_cards)
+      }
     } catch {
       setScoreError('Could not reach the scoring service. Are you online?')
     } finally {
@@ -763,6 +831,12 @@ function EditScriptView({
     if (!score) return
     onHookChange(score.rewrite_hook)
     onBodyChange(score.rewrite_body)
+    // Swap the persisted cue cards to the rewrite's breakdown so Focus mode
+    // follows the rewritten script, not the original.
+    setPendingCueCards(score.rewrite_cue_cards)
+    if (activeScript && score.rewrite_cue_cards && score.rewrite_cue_cards.length > 0) {
+      onPersistCueCards(score.rewrite_cue_cards)
+    }
     setScore(null)
   }
 
@@ -785,13 +859,22 @@ function EditScriptView({
         type="text"
         placeholder="Hook — the opening line that stops the scroll"
         value={hook}
-        onChange={(e) => onHookChange(e.target.value)}
+        onChange={(e) => {
+          onHookChange(e.target.value)
+          // Editing the script invalidates any AI cue cards we persisted.
+          setPendingCueCards(null)
+          onClearCueCards()
+        }}
         className="mb-3 rounded-xl border border-amber-500/30 bg-zinc-900 px-4 py-3 text-lg font-semibold text-amber-100 placeholder-amber-500/50 outline-none"
       />
       <textarea
         placeholder="Paste the rest of your script here..."
         value={body}
-        onChange={(e) => onBodyChange(e.target.value)}
+        onChange={(e) => {
+          onBodyChange(e.target.value)
+          setPendingCueCards(null)
+          onClearCueCards()
+        }}
         className="flex-1 resize-none rounded-xl bg-zinc-900 p-4 text-base leading-relaxed placeholder-zinc-500 outline-none"
       />
       {wordCount > 0 && (
@@ -886,7 +969,7 @@ function EditScriptView({
         </button>
         <button
           type="button"
-          onClick={onSave}
+          onClick={() => onSave(pendingCueCards)}
           disabled={!body.trim()}
           className="flex-[2] rounded-full bg-white py-4 font-semibold text-black disabled:opacity-40 active:scale-95"
         >
@@ -897,19 +980,37 @@ function EditScriptView({
   )
 }
 
-function splitIntoCueCards(text: string, auto = true, maxWords = 16, minWords = 6): string[] {
+// Split a script into teleprompter cue cards. The hook is ALWAYS a single
+// complete card — it is never split, never merged into the first body card,
+// in any mode. In auto mode the body is broken at natural spoken boundaries;
+// in manual mode the creator's line breaks are respected exactly.
+function splitIntoCueCards(hook: string, body: string, auto = true, maxWords = 16, minWords = 6): string[] {
+  const trimmedHook = hook.trim()
+  const trimmedBody = body.trim()
+
+  // Manual mode: respect the user's line breaks exactly. The hook, if present,
+  // is always its own first card.
+  if (!auto) {
+    const cards: string[] = []
+    if (trimmedHook) cards.push(trimmedHook)
+    if (trimmedBody) {
+      for (const line of trimmedBody.split(/\n+/).map((s) => s.trim()).filter(Boolean)) {
+        cards.push(line)
+      }
+    }
+    return cards
+  }
+
+  // Auto mode: split the body at natural spoken boundaries.
+  const bodyCards = splitBodyAuto(trimmedBody, maxWords, minWords)
+  return trimmedHook ? [trimmedHook, ...bodyCards] : bodyCards
+}
+
+function splitBodyAuto(text: string, maxWords: number, minWords: number): string[] {
   const raw = text.trim()
   if (!raw) return []
 
-  // Manual mode: respect the user's line breaks exactly.
-  if (!auto) {
-    return raw
-      .split(/\n+/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-  }
-
-  // Auto mode: sentence-first, then major breaks, then fallback word splits.
+  // Sentence-first, then major breaks, then fallback word splits.
   const sentences = raw
     .replace(/([.!?])\s+/g, '$1\n')
     .split('\n')
@@ -1012,8 +1113,22 @@ function PromptView({
   const pausedAtRef = useRef<number | null>(null)
   const totalPausedMsRef = useRef(0)
 
-  const chunks = useMemo(() => splitIntoCueCards(`${script.hook}\n${script.body}`.trim(), settings.autoCueCards), [script.hook, script.body, settings.autoCueCards])
+  // AI cue cards (from the scoring endpoint) are preferred when present — they
+  // break at natural spoken beats instead of the client-side regex. Falls back
+  // to the regex splitter for unscored scripts. The hook is always card 0.
+  const chunks = useMemo(() => {
+    if (script.cueCards && script.cueCards.length > 0) return script.cueCards
+    return splitIntoCueCards(script.hook, script.body, settings.autoCueCards)
+  }, [script.cueCards, script.hook, script.body, settings.autoCueCards])
   const [chunkIndex, setChunkIndex] = useState(0)
+
+  // Keep chunkIndex in range when the card set changes (sync clears cue cards,
+  // auto/manual toggle, or script edit while the prompt view is open).
+  useEffect(() => {
+    if (chunkIndex > chunks.length - 1) {
+      setChunkIndex(Math.max(0, chunks.length - 1))
+    }
+  }, [chunks.length, chunkIndex])
 
   async function startCamera() {
     streamRef.current?.getTracks().forEach((track) => track.stop())
@@ -1483,19 +1598,36 @@ function PromptView({
   }
 
   const [touchStartX, setTouchStartX] = useState<number | null>(null)
+  const [touchStartY, setTouchStartY] = useState<number | null>(null)
+  // A swipe navigates cue cards; a tap advances. Track whether the current
+  // touch became a swipe so the click that fires right after a swipe-touch can
+  // be suppressed (otherwise a left-swipe also nudges forward via onClick).
+  const swipedRef = useRef(false)
 
   function onTouchStart(e: React.TouchEvent) {
-    if (!settings.focusMode || !isRecording) return
-    setTouchStartX(e.changedTouches[0].clientX)
+    if (!settings.focusMode) return
+    const t = e.changedTouches[0]
+    setTouchStartX(t.clientX)
+    setTouchStartY(t.clientY)
+    swipedRef.current = false
   }
 
   function onTouchEnd(e: React.TouchEvent) {
-    if (touchStartX == null || !settings.focusMode || !isRecording) return
-    const dx = e.changedTouches[0].clientX - touchStartX
-    if (dx < -40) {
-      nextChunk()
-    }
+    if (touchStartX == null || touchStartY == null || !settings.focusMode) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - touchStartX
+    const dy = t.clientY - touchStartY
     setTouchStartX(null)
+    setTouchStartY(null)
+    // Only treat as a horizontal swipe when horizontal motion dominates and
+    // travels far enough — otherwise let vertical scroll/clicks through.
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.5) return
+    swipedRef.current = true
+    if (dx < 0) {
+      nextChunk()
+    } else {
+      setChunkIndex((i) => Math.max(0, i - 1))
+    }
   }
 
   return (
@@ -1516,7 +1648,12 @@ function PromptView({
       <div
         ref={textRef}
         onClick={() => {
-          if (settings.focusMode && isRecording) nextChunk()
+          // A swipe already advanced/rewound the card; don't also fire a tap.
+          if (swipedRef.current) {
+            swipedRef.current = false
+            return
+          }
+          if (settings.focusMode) nextChunk()
         }}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
@@ -1688,12 +1825,18 @@ function PromptView({
           </div>
           <div className="flex items-center justify-center gap-3">
             {!isRecording && settings.focusMode && (
-              <button
-                onClick={() => onUpdateSettings({ autoCueCards: !settings.autoCueCards })}
-                className="rounded-full bg-white/20 px-4 py-2 text-sm text-white backdrop-blur-sm active:scale-95"
-              >
-                {settings.autoCueCards ? 'Auto-cue cards' : 'Use line breaks'}
-              </button>
+              script.cueCards && script.cueCards.length > 0 ? (
+                <span className="rounded-full bg-sky-500/20 px-4 py-2 text-sm font-semibold text-sky-200 backdrop-blur-sm">
+                  ✨ AI cue cards
+                </span>
+              ) : (
+                <button
+                  onClick={() => onUpdateSettings({ autoCueCards: !settings.autoCueCards })}
+                  className="rounded-full bg-white/20 px-4 py-2 text-sm text-white backdrop-blur-sm active:scale-95"
+                >
+                  {settings.autoCueCards ? 'Auto-cue cards' : 'Use line breaks'}
+                </button>
+              )
             )}
             {!isRecording && (
               <button

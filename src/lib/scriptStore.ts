@@ -5,6 +5,10 @@ export interface Script {
   title: string
   hook: string
   body: string
+  // AI-generated cue cards from the scoring endpoint. localStorage-only — not
+  // synced to Supabase (regenerate by re-scoring on another device). When
+  // present, Focus mode prefers these over the client-side regex splitter.
+  cueCards?: string[]
   createdAt: number
   updatedAt: number
 }
@@ -153,7 +157,7 @@ export async function fullSync(local: Script[]): Promise<Script[]> {
     if (error) throw new Error(error.message)
   }
 
-  const { data, error } = await supabase.from('scripts').select('id,title,body,created_at,updated_at')
+  const { data, error } = await supabase.from('scripts').select('id,title,hook,body,created_at,updated_at')
   if (error) throw new Error(error.message)
 
   const merged = new Map<string, Script>()
@@ -161,7 +165,13 @@ export async function fullSync(local: Script[]): Promise<Script[]> {
   for (const row of (data ?? []) as ScriptRow[]) {
     const remote = fromRow(row)
     const localCopy = merged.get(remote.id)
-    if (!localCopy || remote.updatedAt > localCopy.updatedAt) merged.set(remote.id, remote)
+    if (!localCopy) {
+      merged.set(remote.id, remote)
+    } else if (remote.updatedAt > localCopy.updatedAt) {
+      // Remote wins on timestamp, but cueCards are localStorage-only (no DB
+      // column). Carry the local cueCards over so a sync doesn't erase them.
+      merged.set(remote.id, { ...remote, cueCards: localCopy.cueCards })
+    }
   }
 
   const all = [...merged.values()].sort((a, b) => b.updatedAt - a.updatedAt)
