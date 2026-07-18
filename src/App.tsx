@@ -42,7 +42,7 @@ const DEFAULT_SETTINGS: Settings = {
 // Fades text below the top reading line so the reader's gaze stays anchored
 // near the camera (upper portion of the screen).
 const FOCUS_BAND_MASK =
-  'linear-gradient(to bottom, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.05) 18%, rgba(0,0,0,1) 34%, rgba(0,0,0,1) 100%)'
+  'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 14%, rgba(0,0,0,0.05) 30%, rgba(0,0,0,0.05) 100%)'
 
 function loadSettings(): Settings {
   try {
