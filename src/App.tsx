@@ -787,6 +787,15 @@ function EditScriptView({
   // fallback and is what applyRewrite updates.
   const [pendingCueCards, setPendingCueCards] = useState<string[] | null>(null)
 
+  // Rewrite preview + undo. "Preview rewrite" swaps the editor into a
+  // read-only view of the proposed hook + body; the creator then chooses
+  // "Use rewrite" or "Keep mine". After using the rewrite, a 5-second undo
+  // toast restores the original text if they change their mind.
+  const [previewing, setPreviewing] = useState(false)
+  const [applied, setApplied] = useState(false)
+  const [undo, setUndo] = useState<{ hook: string; body: string } | null>(null)
+  const undoTimerRef = useRef<number | null>(null)
+
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0
   // ~150 spoken words per minute is a natural short-form pace.
   const readSeconds = Math.round((wordCount / 150) * 60)
@@ -827,18 +836,58 @@ function EditScriptView({
     }
   }
 
-  async function applyRewrite() {
+  function previewRewrite() {
     if (!score) return
+    setPreviewing(true)
+  }
+
+  function keepMine() {
+    setPreviewing(false)
+  }
+
+  function useRewrite() {
+    if (!score) return
+    // Stash the originals so a 5s undo can restore them.
+    setUndo({ hook, body })
     onHookChange(score.rewrite_hook)
     onBodyChange(score.rewrite_body)
-    // Swap the persisted cue cards to the rewrite's breakdown so Focus mode
-    // follows the rewritten script, not the original.
     setPendingCueCards(score.rewrite_cue_cards)
     if (activeScript && score.rewrite_cue_cards && score.rewrite_cue_cards.length > 0) {
       onPersistCueCards(score.rewrite_cue_cards)
     }
-    setScore(null)
+    setPreviewing(false)
+    setApplied(true)
+    // Keep the score panel visible (annotated "Applied") so the creator
+    // still sees why they accepted — do NOT null the score.
+    if (undoTimerRef.current) window.clearTimeout(undoTimerRef.current)
+    undoTimerRef.current = window.setTimeout(() => {
+      setUndo(null)
+      undoTimerRef.current = null
+    }, 5000)
   }
+
+  function undoRewrite() {
+    if (!undo) return
+    onHookChange(undo.hook)
+    onBodyChange(undo.body)
+    // The rewrite's cue cards no longer match — clear them so Focus mode
+    // falls back to the regex splitter for the original text.
+    setPendingCueCards(null)
+    onClearCueCards()
+    setUndo(null)
+    setApplied(false)
+    if (undoTimerRef.current) {
+      window.clearTimeout(undoTimerRef.current)
+      undoTimerRef.current = null
+    }
+  }
+
+  // Clear the undo timer if the component unmounts mid-countdown.
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) window.clearTimeout(undoTimerRef.current)
+    }
+  }, [])
 
   return (
     <div className="flex h-full flex-col bg-zinc-950 p-4 pt-12">
@@ -861,9 +910,12 @@ function EditScriptView({
         value={hook}
         onChange={(e) => {
           onHookChange(e.target.value)
-          // Editing the script invalidates any AI cue cards we persisted.
+          // Editing the script invalidates any AI cue cards we persisted,
+          // and clears the "Applied" badge + undo from a prior rewrite.
           setPendingCueCards(null)
           onClearCueCards()
+          setApplied(false)
+          setUndo(null)
         }}
         className="mb-3 rounded-xl border border-amber-500/30 bg-zinc-900 px-4 py-3 text-lg font-semibold text-amber-100 placeholder-amber-500/50 outline-none"
       />
@@ -874,6 +926,8 @@ function EditScriptView({
           onBodyChange(e.target.value)
           setPendingCueCards(null)
           onClearCueCards()
+          setApplied(false)
+          setUndo(null)
         }}
         className="flex-1 resize-none rounded-xl bg-zinc-900 p-4 text-base leading-relaxed placeholder-zinc-500 outline-none"
       />
@@ -938,25 +992,87 @@ function EditScriptView({
           )}
           {(score.rewrite_hook || score.rewrite_body) && (
             <div className="mb-2">
-              <p className="text-xs font-semibold text-sky-400">AI rewrite</p>
-              {score.rewrite_hook && (
-                <p className="mb-1 text-sm italic text-zinc-300">“{score.rewrite_hook}”</p>
+              <div className="mb-2 flex items-center gap-2">
+                <p className="text-xs font-semibold text-sky-400">AI rewrite</p>
+                {applied && (
+                  <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                    Applied ✓
+                  </span>
+                )}
+              </div>
+
+              {previewing ? (
+                <div className="mb-2 rounded-xl border border-sky-500/30 bg-sky-500/5 p-3">
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-sky-300/80">
+                    New hook
+                  </p>
+                  {score.rewrite_hook && (
+                    <p className="mb-2 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-amber-100">
+                      {score.rewrite_hook}
+                    </p>
+                  )}
+                  {score.rewrite_body && (
+                    <>
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-sky-300/80">
+                        New body
+                      </p>
+                      <div className="max-h-48 overflow-y-auto rounded-lg bg-zinc-900 px-3 py-2 text-sm text-zinc-200">
+                        <p className="whitespace-pre-wrap">{score.rewrite_body}</p>
+                      </div>
+                    </>
+                  )}
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={keepMine}
+                      className="flex-1 rounded-full bg-zinc-800 py-2 text-sm font-semibold text-white active:scale-95"
+                    >
+                      Keep mine
+                    </button>
+                    <button
+                      type="button"
+                      onClick={useRewrite}
+                      className="flex-1 rounded-full bg-sky-500 py-2 text-sm font-semibold text-white active:scale-95"
+                    >
+                      Use rewrite
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {score.rewrite_hook && !applied && (
+                    <p className="mb-1 text-sm italic text-zinc-300">“{score.rewrite_hook}”</p>
+                  )}
+                  {!applied && (
+                    <button
+                      type="button"
+                      onClick={previewRewrite}
+                      className="mt-2 w-full rounded-full bg-sky-500 py-2 text-sm font-semibold text-white active:scale-95"
+                    >
+                      Preview rewrite
+                    </button>
+                  )}
+                </>
               )}
-              {score.rewrite_body && score.rewrite_body !== body && (
-                <p className="text-sm text-zinc-400">Body rewritten. Tap Apply to preview.</p>
-              )}
-              <button
-                type="button"
-                onClick={applyRewrite}
-                className="mt-2 w-full rounded-full bg-sky-500 py-2 text-sm font-semibold text-white active:scale-95"
-              >
-                Apply rewrite
-              </button>
             </div>
           )}
         </div>
       )}
       {scoreError && <p className="mt-2 text-center text-sm text-red-400">{scoreError}</p>}
+
+      {/* Undo toast: shows for 5s after applying a rewrite. */}
+      {undo && (
+        <div className="mt-3 flex items-center justify-between rounded-xl bg-zinc-800 px-4 py-3">
+          <span className="text-sm text-zinc-200">Rewrite applied</span>
+          <button
+            type="button"
+            onClick={undoRewrite}
+            className="rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-black active:scale-95"
+          >
+            Undo
+          </button>
+        </div>
+      )}
 
       <div className="mt-4 flex gap-3">
         <button
