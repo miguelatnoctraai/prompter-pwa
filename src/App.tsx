@@ -1086,6 +1086,7 @@ function PromptView({
   onBack: () => void
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const reviewVideoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const textRef = useRef<HTMLDivElement>(null)
   const canvasStreamRef = useRef<MediaStream | null>(null)
@@ -1589,6 +1590,15 @@ function PromptView({
     }
   }
 
+  // Leave the review screen (Retake or Back): pause the review video and
+  // release its object URL so repeated takes don't leak blob memory.
+  function discardRecording() {
+    reviewVideoRef.current?.pause()
+    if (recordedUrl) URL.revokeObjectURL(recordedUrl)
+    setRecordedUrl(null)
+    resetScroll()
+  }
+
   function formatTime(totalSeconds: number) {
     const m = Math.floor(totalSeconds / 60)
       .toString()
@@ -1780,34 +1790,63 @@ function PromptView({
       )}
 
       {recordedUrl ? (
-        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-black/90 p-6 text-center text-white">
-          <p className="text-lg font-semibold">Recording complete</p>
-          <p className="text-sm text-zinc-300">
-            Tap Share to save to Photos, or Retake to record again.
-          </p>
-          <div className="flex items-center gap-3">
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-end bg-black/40 text-white">
+          {/* Recorded clip plays back as the background so the creator can
+              see themselves before deciding Retake vs Share. */}
+          <video
+            ref={reviewVideoRef}
+            src={recordedUrl}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          {/* Legibility gradient behind the controls (bottom thumb zone). */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/90 via-black/50 to-transparent" />
+
+          {/* Replay affordance, top-center, out of the thumb zone. */}
+          <button
+            type="button"
+            onClick={() => {
+              const v = reviewVideoRef.current
+              if (v) {
+                v.currentTime = 0
+                void v.play().catch(() => {})
+              }
+            }}
+            className="absolute left-1/2 top-12 z-10 -translate-x-1/2 rounded-full bg-white/20 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm active:scale-95"
+            aria-label="Replay recording"
+          >
+            ↻ Replay
+          </button>
+
+          <div className="relative z-10 w-full max-w-sm px-6 pb-10 text-center">
+            <p className="mb-1 text-lg font-semibold drop-shadow-lg">How did it look?</p>
+            <p className="mb-4 text-sm text-zinc-300 drop-shadow">
+              Save it, or take it again.
+            </p>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={discardRecording}
+                className="rounded-full bg-zinc-800 px-6 py-3 font-semibold text-white active:scale-95"
+              >
+                Retake
+              </button>
+              <button
+                onClick={shareVideo}
+                className="rounded-full bg-white px-6 py-3 font-semibold text-black active:scale-95"
+              >
+                Share video
+              </button>
+            </div>
             <button
-              onClick={() => {
-                setRecordedUrl(null)
-                resetScroll()
-              }}
-              className="rounded-full bg-zinc-800 px-6 py-3 font-semibold text-white active:scale-95"
+              onClick={discardRecording}
+              className="mt-3 text-sm text-zinc-300 active:scale-95"
             >
-              Retake
-            </button>
-            <button
-              onClick={shareVideo}
-              className="rounded-full bg-white px-6 py-3 font-semibold text-black active:scale-95"
-            >
-              Share video
+              Back to scripts
             </button>
           </div>
-          <button
-            onClick={onBack}
-            className="mt-2 text-sm text-zinc-400 active:scale-95"
-          >
-            Back to scripts
-          </button>
         </div>
       ) : (
         <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-4 pb-10">
