@@ -24,6 +24,7 @@ interface Settings {
   focusBand: boolean
   focusMode: boolean
   backgroundBlur: boolean
+  autoCueCards: boolean
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -35,12 +36,13 @@ const DEFAULT_SETTINGS: Settings = {
   focusBand: true,
   focusMode: false,
   backgroundBlur: false,
+  autoCueCards: true,
 }
 
 // Fades text away from the eye-level line (~45vh, where scrolling text enters)
 // so the reader's gaze stays anchored near the camera.
 const FOCUS_BAND_MASK =
-  'linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.2) 28%, rgba(0,0,0,1) 40%, rgba(0,0,0,1) 56%, rgba(0,0,0,0.2) 72%, rgba(0,0,0,0.2) 100%)'
+  'linear-gradient(to bottom, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.05) 32%, rgba(0,0,0,1) 44%, rgba(0,0,0,1) 56%, rgba(0,0,0,0.05) 68%, rgba(0,0,0,0.05) 100%)'
 
 function loadSettings(): Settings {
   try {
@@ -330,7 +332,15 @@ function ScriptListView({
               checked={settings.focusMode}
               onChange={(e) => onUpdateSettings({ focusMode: e.target.checked })}
             />
-            Focus mode (one line at a time)
+            Focus mode (one cue card at a time)
+          </label>
+          <label className="mt-2 flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={settings.autoCueCards}
+              onChange={(e) => onUpdateSettings({ autoCueCards: e.target.checked })}
+            />
+            Auto-cue cards in Focus mode
           </label>
           <label className="mt-2 flex items-center gap-2 text-sm">
             <input
@@ -884,45 +894,80 @@ function EditScriptView({
   )
 }
 
-function splitIntoChunks(text: string, maxWords = 14): string[] {
-  const sentences = text
-    .trim()
+function splitIntoCueCards(text: string, auto = true, maxWords = 16, minWords = 6): string[] {
+  const raw = text.trim()
+  if (!raw) return []
+
+  // Manual mode: respect the user's line breaks exactly.
+  if (!auto) {
+    return raw
+      .split(/\n+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+  }
+
+  // Auto mode: sentence-first, then major breaks, then fallback word splits.
+  const sentences = raw
     .replace(/([.!?])\s+/g, '$1\n')
     .split('\n')
     .map((s) => s.trim())
     .filter(Boolean)
 
-  const chunks: string[] = []
+  const cards: string[] = []
 
   for (const sentence of sentences) {
     const words = sentence.split(/\s+/).filter(Boolean)
 
-    // If the sentence is short enough, keep it whole.
+    // Short sentence = one cue card.
     if (words.length <= maxWords) {
-      chunks.push(sentence)
+      cards.push(sentence)
       continue
     }
 
-    // Long sentence: split on commas/semicolons near the target.
-    let start = 0
-    while (start < words.length) {
-      let end = Math.min(start + maxWords, words.length)
-      let bestEnd = end
+    // Long sentence: split on major breaks first (:, —, ;), then commas if needed.
+    const majorBreakRe = /[:—;]|,(?=\s+(?:and|but|because|so|which|that|or|yet|however|instead|actually|basically|honestly|look|listen|here))/i
+    const parts = sentence
+      .split(majorBreakRe)
+      .map((p) => p.trim())
+      .filter(Boolean)
 
-      for (let j = end - 1; j > start + 3; j--) {
-        const candidate = words.slice(start, j).join(' ')
-        if (/[,;]$/.test(candidate)) {
-          bestEnd = j
-          break
+    for (const part of parts) {
+      const partWords = part.split(/\s+/).filter(Boolean)
+      if (partWords.length <= maxWords) {
+        cards.push(part)
+      } else {
+        // Fallback: hard split near maxWords, preferring commas if nearby.
+        let start = 0
+        while (start < partWords.length) {
+          const target = Math.min(start + maxWords, partWords.length)
+          let end = target
+          if (end < partWords.length) {
+            for (let i = end - 1; i > start + minWords; i--) {
+              if (/[,;]$/.test(partWords[i])) {
+                end = i + 1
+                break
+              }
+            }
+          }
+          cards.push(partWords.slice(start, end).join(' '))
+          start = end
         }
       }
-
-      chunks.push(words.slice(start, bestEnd).join(' '))
-      start = bestEnd
     }
   }
 
-  return chunks
+  // Merge tiny trailing fragments backward so you don't get single-word cards.
+  const merged: string[] = []
+  for (const card of cards) {
+    const wc = card.split(/\s+/).filter(Boolean).length
+    if (wc < minWords && merged.length > 0) {
+      merged[merged.length - 1] += ' ' + card
+    } else {
+      merged.push(card)
+    }
+  }
+
+  return merged
 }
 
 function PromptView({
@@ -955,6 +1000,7 @@ function PromptView({
   const [loading, setLoading] = useState(true)
   const [playing, setPlaying] = useState(false)
   const [showControls, setShowControls] = useState(true)
+  const [showScript, setShowScript] = useState(true)
   const [isRecording, setIsRecording] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [countdown, setCountdown] = useState(0)
@@ -963,7 +1009,7 @@ function PromptView({
   const pausedAtRef = useRef<number | null>(null)
   const totalPausedMsRef = useRef(0)
 
-  const chunks = useMemo(() => splitIntoChunks(`${script.hook}\n${script.body}`.trim()), [script.hook, script.body])
+  const chunks = useMemo(() => splitIntoCueCards(`${script.hook}\n${script.body}`.trim(), settings.autoCueCards), [script.hook, script.body, settings.autoCueCards])
   const [chunkIndex, setChunkIndex] = useState(0)
 
   async function startCamera() {
@@ -1465,12 +1511,14 @@ function PromptView({
         }}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
-        className={`no-scrollbar absolute inset-0 overflow-y-auto ${settings.mirror ? 'scale-x-[-1]' : ''}`}
+        className={`no-scrollbar absolute inset-0 overflow-y-auto ${settings.mirror ? 'scale-x-[-1]' : ''} ${showScript ? '' : 'opacity-0'}`}
         style={{
           paddingTop: settings.focusMode ? '22vh' : '12vh',
           paddingBottom: '40vh',
           paddingLeft: settings.margin,
           paddingRight: settings.margin,
+          transition: 'opacity 200ms ease',
+          pointerEvents: showScript ? 'auto' : 'none',
         }}
       >
         {settings.focusMode ? (
@@ -1544,17 +1592,26 @@ function PromptView({
               ← Scripts
             </button>
             <span className="text-sm font-medium text-white/90">{script.title}</span>
-            <button
-              onClick={() => setShowControls(false)}
-              className="rounded-full bg-white/20 p-2 text-white backdrop-blur-sm active:scale-95"
-              aria-label="Hide controls"
-            >
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowScript((s) => !s)}
+                className="rounded-full bg-white/20 px-4 py-2 text-sm text-white backdrop-blur-sm active:scale-95"
+                aria-label={showScript ? 'Hide script' : 'Show script'}
+              >
+                {showScript ? 'Hide script' : 'Show script'}
+              </button>
+              <button
+                onClick={() => setShowControls(false)}
+                className="rounded-full bg-white/20 p-2 text-white backdrop-blur-sm active:scale-95"
+                aria-label="Hide controls"
+              >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M4 14h6v6M20 10h-6V4M20 20 4 4" />
               </svg>
             </button>
           </div>
         </div>
+      </div>
       )}
 
       {!showControls && !isRecording && !recordedUrl && (
@@ -1623,6 +1680,14 @@ function PromptView({
             )}
           </div>
           <div className="flex items-center justify-center gap-3">
+            {!isRecording && settings.focusMode && (
+              <button
+                onClick={() => onUpdateSettings({ autoCueCards: !settings.autoCueCards })}
+                className="rounded-full bg-white/20 px-4 py-2 text-sm text-white backdrop-blur-sm active:scale-95"
+              >
+                {settings.autoCueCards ? 'Auto-cue cards' : 'Use line breaks'}
+              </button>
+            )}
             {!isRecording && (
               <button
                 onClick={resetScroll}
