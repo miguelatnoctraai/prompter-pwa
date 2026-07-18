@@ -3,7 +3,8 @@ import { FilesetResolver, ImageSegmenter } from '@mediapipe/tasks-vision'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import {
-  type Script,
+  countWords,
+  formatRelativeTime,
   loadScripts,
   saveScripts,
   addTombstone,
@@ -11,6 +12,7 @@ import {
   pushDeletion,
   fullSync,
   seedDemoScriptIfFirstRun,
+  type Script,
 } from './lib/scriptStore'
 
 interface Settings {
@@ -349,7 +351,7 @@ function ScriptListView({
 
       {showBetaBlurDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6">
-          <div className="max-w-sm rounded-2xl bg-zinc-900 p-6 text-center">
+          <div className="max-w-sm rounded-2xl bg-zinc-900/90 p-6 text-center backdrop-blur-xl">
             <h3 className="mb-2 text-lg font-bold text-white">Beta: background blur</h3>
             <p className="mb-4 text-sm text-zinc-300">
               This feature uses AI to blur your background in real time. It may heat up your phone, reduce frame rate, or have rough edges around hair. Turn it off if performance drops.
@@ -378,13 +380,17 @@ function ScriptListView({
       )}
 
       {scripts.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center text-zinc-400">
-          <p className="text-3xl">🎬</p>
-          <p>Write what you want to say — TalkShot scrolls it at your eye line while you film.</p>
+        <div className="flex flex-1 flex-col items-center justify-center gap-5 px-8 text-center">
+          <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-sky-400 to-violet-500 text-4xl shadow-lg shadow-violet-500/20">
+            🎬
+          </div>
+          <p className="max-w-xs text-lg text-zinc-300">
+            Write what you want to say. TalkShot scrolls it at eye level while you film.
+          </p>
           <button
             type="button"
             onClick={onCreate}
-            className="rounded-full bg-white px-6 py-3 font-semibold text-black active:scale-95"
+            className="rounded-full bg-white px-7 py-3.5 font-semibold text-black shadow-lg shadow-white/10 active:scale-95"
           >
             Write your first script
           </button>
@@ -394,42 +400,46 @@ function ScriptListView({
           {scripts.map((script) => (
             <div
               key={script.id}
-              className="flex items-center justify-between rounded-2xl bg-zinc-900 p-4"
+              className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900 to-zinc-950 p-4 shadow-sm transition-transform active:scale-[0.98]"
             >
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">{script.title}</p>
-                <p className="truncate text-sm text-zinc-400">
-                  {script.hook || script.body.slice(0, 60).replace(/\n/g, ' ')}
-                  {((script.hook?.length && script.hook.length > 60) || script.body.length > 60) && '…'}
-                </p>
-              </div>
-              <div className="ml-3 flex items-center gap-2">
+              <div className="flex items-center justify-between">
+                <div className="min-w-0 flex-1 pr-3">
+                  <p className="truncate font-semibold text-white">{script.title}</p>
+                  <p className="truncate text-sm text-zinc-400">
+                    {script.hook || script.body.slice(0, 60).replace(/\n/g, ' ')}
+                    {((script.hook?.length && script.hook.length > 60) || script.body.length > 60) && '…'}
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={() => onPrompt(script)}
-                  className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black active:scale-95"
+                  className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-black shadow-md shadow-white/10 active:scale-95"
                 >
                   Prompt
                 </button>
+              </div>
+
+              <div className="mt-3 flex items-center gap-3 text-xs text-zinc-500">
+                <span className="rounded-full bg-zinc-800 px-2.5 py-1">
+                  {countWords(script.hook + ' ' + script.body)} words
+                </span>
+                <span className="rounded-full bg-zinc-800 px-2.5 py-1">
+                  {formatRelativeTime(script.updatedAt)}
+                </span>
                 <button
                   type="button"
                   onClick={() => onEdit(script)}
-                  className="rounded-full bg-zinc-800 p-2 text-zinc-300 active:scale-95"
-                  aria-label="Edit"
+                  className="ml-auto rounded-full bg-zinc-800 px-3 py-1 text-zinc-300 active:scale-95"
                 >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-                  </svg>
+                  Edit
                 </button>
                 <button
                   type="button"
                   onClick={() => onDelete(script.id)}
-                  className="rounded-full bg-zinc-800 p-2 text-red-400 active:scale-95"
+                  className="rounded-full bg-zinc-800 p-1.5 text-zinc-400 active:scale-95"
                   aria-label="Delete"
                 >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14" />
-                  </svg>
+                  🗑
                 </button>
               </div>
             </div>
@@ -440,12 +450,10 @@ function ScriptListView({
       <button
         type="button"
         onClick={onCreate}
-        className="absolute bottom-8 right-8 rounded-full bg-white p-4 text-black shadow-lg active:scale-95"
+        className="absolute bottom-6 right-6 flex h-14 w-14 items-center justify-center rounded-full bg-white text-2xl font-bold text-black shadow-lg shadow-white/10 active:scale-95"
         aria-label="New script"
       >
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M12 5v14M5 12h14" />
-        </svg>
+        +
       </button>
     </div>
   )
@@ -1451,39 +1459,56 @@ function PromptView({
         }}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
-        className={`no-scrollbar absolute inset-0 overflow-y-auto ${settings.mirror ? 'scale-x-[-1]' : ''} ${settings.focusMode ? 'flex items-start justify-center pt-[18vh]' : ''}`}
+        className={`no-scrollbar absolute inset-0 overflow-y-auto ${settings.mirror ? 'scale-x-[-1]' : ''}`}
         style={{
-          paddingTop: settings.focusMode ? undefined : '18vh',
-          paddingBottom: '35vh',
+          paddingTop: settings.focusMode ? '22vh' : '12vh',
+          paddingBottom: '40vh',
           paddingLeft: settings.margin,
           paddingRight: settings.margin,
-          ...(settings.focusBand && !settings.focusMode
-            ? { WebkitMaskImage: FOCUS_BAND_MASK, maskImage: FOCUS_BAND_MASK }
-            : {}),
         }}
       >
         {settings.focusMode ? (
-          <p
-            className="w-full whitespace-pre-wrap px-4 text-center font-semibold text-white drop-shadow-lg"
+          <div className="mx-4 rounded-3xl border border-white/10 bg-black/40 px-6 py-10 backdrop-blur-xl"
             style={{
-              fontSize: settings.fontSize,
-              lineHeight: settings.lineHeight,
+              minHeight: '38vh',
             }}
           >
-            {chunks[chunkIndex]}
-          </p>
+            <div className="flex flex-1 items-center justify-center">
+              <p
+                key={chunkIndex}
+                className="w-full animate-in fade-in slide-in-from-right-4 whitespace-pre-wrap text-center font-semibold text-white drop-shadow-lg duration-200"
+                style={{
+                  fontSize: settings.fontSize,
+                  lineHeight: settings.lineHeight,
+                }}
+              >
+                {chunks[chunkIndex]}
+              </p>
+            </div>
+          </div>
         ) : (
-          <p
-            className="whitespace-pre-wrap text-center font-semibold text-white drop-shadow-lg"
+          <div
+            className="mx-4 rounded-3xl border border-white/10 bg-black/40 px-6 py-8 backdrop-blur-xl"
             style={{
-              fontSize: settings.fontSize,
-              lineHeight: settings.lineHeight,
+              ...(settings.focusBand
+                ? { WebkitMaskImage: FOCUS_BAND_MASK, maskImage: FOCUS_BAND_MASK }
+                : {}),
             }}
           >
-            {script.hook && <span className="block">{script.hook}</span>}
-            {script.hook && script.body && <br />}
-            {script.body}
-          </p>
+            <p
+              className="whitespace-pre-wrap text-center font-semibold text-white drop-shadow-lg"
+              style={{
+                fontSize: settings.fontSize,
+                lineHeight: settings.lineHeight,
+              }}
+            >
+              {script.hook && (
+                <span className="block text-sky-300">{script.hook}</span>
+              )}
+              {script.hook && script.body && <br />}
+              {script.body}
+            </p>
+          </div>
         )}
       </div>
 
