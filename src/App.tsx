@@ -1321,7 +1321,13 @@ function PromptView({
   }
 
   function togglePlay() {
-    setPlaying((p) => !p)
+    setPlaying((p) => {
+      if (!p && textRef.current) {
+        // Resume from wherever the user scrolled, not from stale progress.
+        progressRef.current = textRef.current.scrollTop
+      }
+      return !p
+    })
   }
 
   function resetRecordingState() {
