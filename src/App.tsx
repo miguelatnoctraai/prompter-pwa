@@ -1519,6 +1519,9 @@ function PromptView({
           paddingRight: settings.margin,
           transition: 'opacity 200ms ease',
           pointerEvents: showScript ? 'auto' : 'none',
+          ...(settings.focusBand && !settings.focusMode
+            ? { WebkitMaskImage: FOCUS_BAND_MASK, maskImage: FOCUS_BAND_MASK }
+            : {}),
         }}
       >
         {settings.focusMode ? (
@@ -1543,11 +1546,6 @@ function PromptView({
         ) : (
           <div
             className="mx-4 rounded-3xl border border-white/10 bg-black/40 px-6 py-8 backdrop-blur-xl"
-            style={{
-              ...(settings.focusBand
-                ? { WebkitMaskImage: FOCUS_BAND_MASK, maskImage: FOCUS_BAND_MASK }
-                : {}),
-            }}
           >
             <p
               className="whitespace-pre-wrap text-center font-semibold text-white drop-shadow-lg"
