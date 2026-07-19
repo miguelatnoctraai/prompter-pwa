@@ -104,7 +104,9 @@ export default async function handler(
   try {
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 2048,
+      // Two full cue-card sets + rewrite scale with script length (up to 8000
+      // chars). 2048 truncated long scripts → invalid JSON. 5120 gives headroom.
+      max_tokens: 5120,
       system: SYSTEM_PROMPT,
       output_config: { format: { type: 'json_schema', schema: RESULT_SCHEMA } },
       messages: [
