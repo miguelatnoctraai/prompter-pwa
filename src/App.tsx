@@ -258,6 +258,57 @@ export default function App() {
   )
 }
 
+const TEXT_SIZE_PRESETS = [
+  { label: 'Small', value: 34 },
+  { label: 'Comfortable', value: 48 },
+  { label: 'Large', value: 64 },
+]
+
+const SPEED_PRESETS = [
+  { label: 'Slow', value: 30 },
+  { label: 'Normal', value: 55 },
+  { label: 'Fast', value: 90 },
+]
+
+// Segmented preset picker. Highlights the preset nearest the current value so
+// any stored/legacy number still maps to a selected chip.
+function PresetPicker({
+  label,
+  presets,
+  value,
+  onChange,
+}: {
+  label: string
+  presets: { label: string; value: number }[]
+  value: number
+  onChange: (v: number) => void
+}) {
+  const activeIdx = presets.reduce(
+    (best, p, i) =>
+      Math.abs(p.value - value) < Math.abs(presets[best].value - value) ? i : best,
+    0,
+  )
+  return (
+    <div>
+      <p className="mb-2 text-sm text-white/90">{label}</p>
+      <div className="flex gap-1 rounded-full bg-white/10 p-1">
+        {presets.map((p, i) => (
+          <button
+            key={p.label}
+            type="button"
+            onClick={() => onChange(p.value)}
+            className={`flex-1 rounded-full py-2 text-sm transition-colors active:scale-95 ${
+              i === activeIdx ? 'bg-white font-semibold text-black' : 'text-white/70'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function ScriptListView({
   scripts,
   onCreate,
@@ -330,44 +381,19 @@ function ScriptListView({
               {signedIn ? 'Account' : 'Sign in to sync'}
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1 text-sm">
-              Font size
-              <input
-                type="number"
-                value={settings.fontSize}
-                onChange={(e) => onUpdateSettings({ fontSize: Number(e.target.value) })}
-                className="rounded-lg bg-zinc-800 px-3 py-2"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              Line height
-              <input
-                type="number"
-                step="0.1"
-                value={settings.lineHeight}
-                onChange={(e) => onUpdateSettings({ lineHeight: Number(e.target.value) })}
-                className="rounded-lg bg-zinc-800 px-3 py-2"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              Speed
-              <input
-                type="number"
-                value={settings.speed}
-                onChange={(e) => onUpdateSettings({ speed: Number(e.target.value) })}
-                className="rounded-lg bg-zinc-800 px-3 py-2"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              Margin
-              <input
-                type="number"
-                value={settings.margin}
-                onChange={(e) => onUpdateSettings({ margin: Number(e.target.value) })}
-                className="rounded-lg bg-zinc-800 px-3 py-2"
-              />
-            </label>
+          <div className="space-y-4">
+            <PresetPicker
+              label="Text size"
+              presets={TEXT_SIZE_PRESETS}
+              value={settings.fontSize}
+              onChange={(v) => onUpdateSettings({ fontSize: v })}
+            />
+            <PresetPicker
+              label="Scroll speed"
+              presets={SPEED_PRESETS}
+              value={settings.speed}
+              onChange={(v) => onUpdateSettings({ speed: v })}
+            />
           </div>
           <label className="mt-3 flex items-center gap-2 text-sm">
             <input
@@ -2145,30 +2171,20 @@ function PromptView({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-zinc-600" />
-            <label className="mb-5 flex flex-col gap-2 text-sm text-white/90">
-              <span className="flex items-center justify-between">
-                Text size <span className="text-zinc-400">{settings.fontSize}</span>
-              </span>
-              <input
-                type="range"
-                min="20"
-                max="80"
+            <div className="mb-6 space-y-4">
+              <PresetPicker
+                label="Text size"
+                presets={TEXT_SIZE_PRESETS}
                 value={settings.fontSize}
-                onChange={(e) => onUpdateSettings({ fontSize: Number(e.target.value) })}
+                onChange={(v) => onUpdateSettings({ fontSize: v })}
               />
-            </label>
-            <label className="mb-6 flex flex-col gap-2 text-sm text-white/90">
-              <span className="flex items-center justify-between">
-                Scroll speed <span className="text-zinc-400">{settings.speed}</span>
-              </span>
-              <input
-                type="range"
-                min="10"
-                max="150"
+              <PresetPicker
+                label="Scroll speed"
+                presets={SPEED_PRESETS}
                 value={settings.speed}
-                onChange={(e) => onUpdateSettings({ speed: Number(e.target.value) })}
+                onChange={(v) => onUpdateSettings({ speed: v })}
               />
-            </label>
+            </div>
             <div className="space-y-4">
               <label className="flex items-center justify-between text-sm text-white/90">
                 Mirror text
