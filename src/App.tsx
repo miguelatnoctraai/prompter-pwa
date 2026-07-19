@@ -506,7 +506,7 @@ function ScriptListView({
                 </button>
               </div>
 
-              <div className="mt-3 flex items-center gap-3 text-xs text-zinc-500">
+              <div className="mt-3 flex items-center gap-2 text-xs text-zinc-500">
                 <span className="rounded-full bg-zinc-800 px-2.5 py-1">
                   {countWords(script.hook + ' ' + script.body)} words
                 </span>
@@ -516,17 +516,20 @@ function ScriptListView({
                 <button
                   type="button"
                   onClick={() => onEdit(script)}
-                  className="ml-auto rounded-full bg-zinc-800 px-3 py-1 text-zinc-300 active:scale-95"
+                  className="ml-auto rounded-full bg-zinc-800 px-4 py-2 font-medium text-zinc-200 active:scale-95"
                 >
                   Edit
                 </button>
                 <button
                   type="button"
                   onClick={() => onDelete(script.id)}
-                  className="rounded-full bg-zinc-800 p-1.5 text-zinc-400 active:scale-95"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-800 text-zinc-400 active:scale-95"
                   aria-label="Delete"
                 >
-                  🗑
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                    <path d="M10 11v6M14 11v6" />
+                  </svg>
                 </button>
               </div>
             </div>
@@ -964,8 +967,8 @@ function EditScriptView({
       )}
 
       {score && (
-        <div className="mt-3 max-h-64 overflow-y-auto rounded-2xl bg-zinc-900 p-4">
-          <div className="mb-3 flex items-center justify-between">
+        <div className="mt-3 max-h-72 space-y-4 overflow-y-auto rounded-2xl bg-zinc-900 p-5">
+          <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
               Script score
             </h2>
@@ -977,7 +980,7 @@ function EditScriptView({
               Dismiss
             </button>
           </div>
-          <div className="mb-3 grid grid-cols-5 gap-2 text-center">
+          <div className="grid grid-cols-5 gap-2 text-center">
             {(
               [
                 ['Hook', score.scores.hook],
@@ -987,19 +990,19 @@ function EditScriptView({
                 ['Overall', score.scores.overall],
               ] as const
             ).map(([label, value]) => (
-              <div key={label} className="rounded-lg bg-zinc-800 py-2">
-                <p className="text-lg font-bold">{value}</p>
-                <p className="text-[10px] uppercase tracking-wide text-zinc-400">{label}</p>
+              <div key={label} className="rounded-xl bg-zinc-800 py-2.5">
+                <p className="text-xl font-bold">{value}</p>
+                <p className="mt-0.5 text-[10px] uppercase tracking-wide text-zinc-400">{label}</p>
               </div>
             ))}
           </div>
-          <p className="mb-2 text-xs text-zinc-400">
+          <p className="text-xs text-zinc-400">
             Estimated duration: ~{score.estimated_seconds}s
           </p>
           {score.strengths.length > 0 && (
-            <div className="mb-2">
-              <p className="text-xs font-semibold text-emerald-400">Working well</p>
-              <ul className="list-disc pl-4 text-sm text-zinc-300">
+            <div>
+              <p className="mb-1 text-xs font-semibold text-emerald-400">Working well</p>
+              <ul className="list-disc space-y-1 pl-4 text-sm text-zinc-300">
                 {score.strengths.map((s) => (
                   <li key={s}>{s}</li>
                 ))}
@@ -1007,9 +1010,9 @@ function EditScriptView({
             </div>
           )}
           {score.suggestions.length > 0 && (
-            <div className="mb-2">
-              <p className="text-xs font-semibold text-amber-400">Improve</p>
-              <ul className="list-disc pl-4 text-sm text-zinc-300">
+            <div>
+              <p className="mb-1 text-xs font-semibold text-amber-400">Improve</p>
+              <ul className="list-disc space-y-1 pl-4 text-sm text-zinc-300">
                 {score.suggestions.map((s) => (
                   <li key={s}>{s}</li>
                 ))}
