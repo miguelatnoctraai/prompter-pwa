@@ -1226,6 +1226,7 @@ function PromptView({
   const [playing, setPlaying] = useState(false)
   const [showControls, setShowControls] = useState(true)
   const [showScript, setShowScript] = useState(true)
+  const [showTune, setShowTune] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [countdown, setCountdown] = useState(0)
@@ -2036,158 +2037,175 @@ function PromptView({
             </button>
           </div>
         </div>
-      ) : (
+      ) : isRecording ? (
         <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-4 pb-10">
-          <div className="mb-3 flex items-center justify-center">
-            {settings.focusMode && isRecording && (
+          <div className="mb-5 flex min-h-[28px] items-center justify-center gap-2">
+            {settings.focusMode && (
               <span className="rounded-full bg-black/50 px-4 py-1 text-sm font-semibold text-white backdrop-blur-sm">
                 {chunkIndex + 1} / {chunks.length}
               </span>
             )}
-            {isRecording && (
-              <span className="rounded-full bg-black/30 px-3 py-1 text-xs text-white/70 backdrop-blur-sm">
-                Hold pause to stop
+            <span className="rounded-full bg-black/30 px-3 py-1 text-xs text-white/70 backdrop-blur-sm">
+              Hold to stop
+            </span>
+          </div>
+          <div className="flex items-center justify-center">
+            <button
+              onClick={isPaused ? resumeRecording : pauseRecording}
+              onTouchStart={beginStopPress}
+              onTouchEnd={cancelStopPress}
+              onMouseDown={beginStopPress}
+              onMouseUp={cancelStopPress}
+              onMouseLeave={cancelStopPress}
+              className="flex h-[76px] w-[76px] items-center justify-center rounded-full bg-white text-3xl text-black shadow-lg active:scale-95"
+              aria-label={isPaused ? 'Resume recording' : 'Pause recording'}
+            >
+              {isPaused ? '▶' : '⏸'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-4 pb-10">
+          {/* Utility row: reset + status + adjust, kept small and out of the way */}
+          <div className="mb-5 flex min-h-[28px] items-center justify-between gap-2">
+            <button
+              onClick={resetScroll}
+              className="rounded-full bg-white/10 px-3 py-2 text-xs font-medium text-white/90 backdrop-blur-sm active:scale-95"
+              aria-label="Reset to start"
+            >
+              ↺ Reset
+            </button>
+            <div className="flex-1 text-center">
+              {settings.focusMode &&
+                (script.cueCards && script.cueCards.length > 0 ? (
+                  <span className="rounded-full bg-sky-500/20 px-3 py-1 text-xs font-semibold text-sky-200 backdrop-blur-sm">
+                    ✨ AI cue cards
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => onUpdateSettings({ autoCueCards: !settings.autoCueCards })}
+                    className="rounded-full bg-white/15 px-3 py-1 text-xs text-white backdrop-blur-sm active:scale-95"
+                  >
+                    {settings.autoCueCards ? 'Auto cards' : 'Line breaks'}
+                  </button>
+                ))}
+            </div>
+            <button
+              onClick={() => setShowTune(true)}
+              className="rounded-full bg-white/10 px-3 py-2 text-xs font-medium text-white/90 backdrop-blur-sm active:scale-95"
+              aria-label="Adjust text and display"
+            >
+              Aa Adjust
+            </button>
+          </div>
+
+          {/* Main row: hero record flanked by Play/Next and Flip */}
+          <div className="flex items-center justify-center gap-8">
+            <button
+              onClick={settings.focusMode ? nextChunk : togglePlay}
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-white/15 text-lg font-semibold text-white backdrop-blur-sm active:scale-95"
+              aria-label={settings.focusMode ? 'Next card' : playing ? 'Pause scroll' : 'Play scroll'}
+            >
+              {settings.focusMode ? <span className="text-xs">Next</span> : playing ? '⏸' : '▶'}
+            </button>
+
+            <button
+              onClick={startRecordingWithCountdown}
+              className="flex h-[76px] w-[76px] items-center justify-center rounded-full border-4 border-white/80 active:scale-95"
+              aria-label="Record"
+            >
+              <span className="h-14 w-14 rounded-full bg-red-500" />
+            </button>
+
+            <button
+              onClick={() => setFacingMode((m) => (m === 'user' ? 'environment' : 'user'))}
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-sm active:scale-95"
+              aria-label="Flip camera"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M11 19H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5" />
+                <path d="M13 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5" />
+                <circle cx="12" cy="12" r="3" />
+                <path d="m18 22-3-3 3-3" />
+                <path d="m6 2 3 3-3 3" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Adjust sheet: display settings, moved off the camera into a slide-up. */}
+      {showTune && !isRecording && !recordedUrl && (
+        <div
+          className="absolute inset-0 z-40 flex items-end bg-black/40"
+          onClick={() => setShowTune(false)}
+        >
+          <div
+            className="w-full rounded-t-3xl bg-zinc-900/95 p-6 pb-10 backdrop-blur-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-zinc-600" />
+            <label className="mb-5 flex flex-col gap-2 text-sm text-white/90">
+              <span className="flex items-center justify-between">
+                Text size <span className="text-zinc-400">{settings.fontSize}</span>
               </span>
-            )}
-          </div>
-          <div className="flex items-center justify-center gap-3">
-            {!isRecording && settings.focusMode && (
-              script.cueCards && script.cueCards.length > 0 ? (
-                <span className="rounded-full bg-sky-500/20 px-4 py-2 text-sm font-semibold text-sky-200 backdrop-blur-sm">
-                  ✨ AI cue cards
-                </span>
-              ) : (
-                <button
-                  onClick={() => onUpdateSettings({ autoCueCards: !settings.autoCueCards })}
-                  className="rounded-full bg-white/20 px-4 py-2 text-sm text-white backdrop-blur-sm active:scale-95"
-                >
-                  {settings.autoCueCards ? 'Auto-cue cards' : 'Use line breaks'}
-                </button>
-              )
-            )}
-            {!isRecording && (
-              <button
-                onClick={resetScroll}
-                className="rounded-full bg-white/20 p-3 text-white backdrop-blur-sm active:scale-95"
-                aria-label="Reset"
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                  <path d="M3 3v5h5" />
-                </svg>
-              </button>
-            )}
-
-            {isRecording ? (
-              isPaused ? (
-                <button
-                  onClick={resumeRecording}
-                  onTouchStart={beginStopPress}
-                  onTouchEnd={cancelStopPress}
-                  onMouseDown={beginStopPress}
-                  onMouseUp={cancelStopPress}
-                  onMouseLeave={cancelStopPress}
-                  className="flex items-center gap-2 rounded-full bg-white px-6 py-3 font-bold text-black shadow-lg active:scale-95"
-                >
-                  ▶ Resume
-                </button>
-              ) : (
-                <button
-                  onClick={pauseRecording}
-                  onTouchStart={beginStopPress}
-                  onTouchEnd={cancelStopPress}
-                  onMouseDown={beginStopPress}
-                  onMouseUp={cancelStopPress}
-                  onMouseLeave={cancelStopPress}
-                  className="flex items-center gap-2 rounded-full bg-white px-6 py-3 font-bold text-black shadow-lg active:scale-95"
-                >
-                  ⏸ Pause
-                </button>
-              )
-            ) : null}
-            {!isRecording && (
-              <button
-                onClick={settings.focusMode ? nextChunk : togglePlay}
-                className="rounded-full bg-white px-6 py-3 font-bold text-black shadow-lg active:scale-95"
-              >
-                {settings.focusMode ? 'Next' : playing ? 'Pause' : 'Play'}
-              </button>
-            )}
-            {!isRecording && (
-              <button
-                onClick={startRecordingWithCountdown}
-                className="flex items-center gap-2 rounded-full bg-red-500 px-6 py-3 font-bold text-white shadow-lg active:scale-95"
-              >
-                <span className="h-3 w-3 rounded-full bg-white" />
-                Record
-              </button>
-            )}
-
-            {!isRecording && (
-              <button
-                onClick={() => setFacingMode((m) => (m === 'user' ? 'environment' : 'user'))}
-                className="rounded-full bg-white/20 p-3 text-white backdrop-blur-sm active:scale-95"
-                aria-label="Flip camera"
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M11 19H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5" />
-                  <path d="M13 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5" />
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="m18 22-3-3 3-3" />
-                  <path d="m6 2 3 3-3 3" />
-                </svg>
-              </button>
-            )}
-          </div>
-
-          {showControls && !isRecording && (
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <label className="flex flex-col gap-1 text-xs text-white/80">
-                Font size
-                <input
-                  type="range"
-                  min="20"
-                  max="80"
-                  value={settings.fontSize}
-                  onChange={(e) => onUpdateSettings({ fontSize: Number(e.target.value) })}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-xs text-white/80">
-                Speed
-                <input
-                  type="range"
-                  min="10"
-                  max="150"
-                  value={settings.speed}
-                  onChange={(e) => onUpdateSettings({ speed: Number(e.target.value) })}
-                />
-              </label>
-              <label className="flex items-center gap-2 text-xs text-white/80">
+              <input
+                type="range"
+                min="20"
+                max="80"
+                value={settings.fontSize}
+                onChange={(e) => onUpdateSettings({ fontSize: Number(e.target.value) })}
+              />
+            </label>
+            <label className="mb-6 flex flex-col gap-2 text-sm text-white/90">
+              <span className="flex items-center justify-between">
+                Scroll speed <span className="text-zinc-400">{settings.speed}</span>
+              </span>
+              <input
+                type="range"
+                min="10"
+                max="150"
+                value={settings.speed}
+                onChange={(e) => onUpdateSettings({ speed: Number(e.target.value) })}
+              />
+            </label>
+            <div className="space-y-4">
+              <label className="flex items-center justify-between text-sm text-white/90">
+                Mirror text
                 <input
                   type="checkbox"
+                  className="h-5 w-5"
                   checked={settings.mirror}
                   onChange={(e) => onUpdateSettings({ mirror: e.target.checked })}
                 />
-                Mirror
               </label>
-              <label className="flex items-center gap-2 text-xs text-white/80">
+              <label className="flex items-center justify-between text-sm text-white/90">
+                Focus band (dim edges)
                 <input
                   type="checkbox"
+                  className="h-5 w-5"
                   checked={settings.focusBand}
                   onChange={(e) => onUpdateSettings({ focusBand: e.target.checked })}
                 />
-                Focus band
               </label>
-              <label className="flex items-center gap-2 text-xs text-white/80">
+              <label className="flex items-center justify-between text-sm text-white/90">
+                Focus mode (one card at a time)
                 <input
                   type="checkbox"
+                  className="h-5 w-5"
                   checked={settings.focusMode}
                   onChange={(e) => onUpdateSettings({ focusMode: e.target.checked })}
                 />
-                Focus mode
               </label>
             </div>
-          )}
+            <button
+              type="button"
+              onClick={() => setShowTune(false)}
+              className="mt-7 w-full rounded-full bg-white py-3.5 font-semibold text-black active:scale-95"
+            >
+              Done
+            </button>
+          </div>
         </div>
       )}
     </div>
