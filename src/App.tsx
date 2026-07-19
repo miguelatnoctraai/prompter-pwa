@@ -825,9 +825,16 @@ function EditScriptView({
   const [undo, setUndo] = useState<{ hook: string; body: string } | null>(null)
   const undoTimerRef = useRef<number | null>(null)
 
-  const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0
+  const spoken = `${hook} ${body}`.trim()
+  const wordCount = spoken ? spoken.split(/\s+/).length : 0
   // ~150 spoken words per minute is a natural short-form pace.
   const readSeconds = Math.round((wordCount / 150) * 60)
+  // Duration meter: 90s spans the short-form range; markers at platform beats.
+  const METER_MAX = 90
+  const meterPct = Math.min(100, (readSeconds / METER_MAX) * 100)
+  const tooLong = readSeconds > 60
+  const zone =
+    readSeconds <= 15 ? 'quick' : readSeconds <= 35 ? 'punchy' : readSeconds <= 60 ? 'solid' : 'long'
 
   async function scoreScript() {
     setScoring(true)
@@ -961,9 +968,33 @@ function EditScriptView({
         className="flex-1 resize-none rounded-xl bg-zinc-900 p-4 text-base leading-relaxed placeholder-zinc-500 outline-none"
       />
       {wordCount > 0 && (
-        <p className="mt-2 text-xs text-zinc-500">
-          {wordCount} words · ~{readSeconds}s spoken
-        </p>
+        <div className="mt-3">
+          <div className="mb-1.5 flex items-center justify-between text-xs">
+            <span className="text-zinc-400">{wordCount} words</span>
+            <span className={tooLong ? 'font-semibold text-amber-300' : 'font-semibold text-white'}>
+              ~{readSeconds}s · {zone}
+            </span>
+          </div>
+          <div className="relative h-2 w-full rounded-full bg-zinc-800">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${
+                tooLong ? 'bg-amber-400' : 'bg-gradient-to-r from-sky-400 to-violet-500'
+              }`}
+              style={{ width: `${meterPct}%` }}
+            />
+          </div>
+          <div className="relative mt-1 h-3 text-[10px] text-zinc-500">
+            {[15, 30, 60].map((t) => (
+              <span
+                key={t}
+                className="absolute -translate-x-1/2"
+                style={{ left: `${(t / METER_MAX) * 100}%` }}
+              >
+                {t}s
+              </span>
+            ))}
+          </div>
+        </div>
       )}
 
       {score && (
