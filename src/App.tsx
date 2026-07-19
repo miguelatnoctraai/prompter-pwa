@@ -334,7 +334,7 @@ function ScriptListView({
   const [showBetaBlurDialog, setShowBetaBlurDialog] = useState(false)
 
   return (
-    <div className="flex h-full flex-col bg-zinc-950 p-4 pt-12">
+    <div className="ts-view flex h-full flex-col bg-zinc-950 p-4 pt-12">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold">TalkShot</h1>
         <div className="flex items-center gap-2">
@@ -648,7 +648,7 @@ function AccountView({
   }
 
   return (
-    <div className="flex h-full flex-col bg-zinc-950 p-4 pt-12">
+    <div className="ts-view flex h-full flex-col bg-zinc-950 p-4 pt-12">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-bold">Account</h1>
         <button type="button" onClick={onBack} className="text-zinc-400 active:scale-95">
@@ -926,7 +926,7 @@ function EditScriptView({
   }, [])
 
   return (
-    <div className="flex h-full flex-col bg-zinc-950 p-4 pt-12">
+    <div className="ts-view flex h-full flex-col bg-zinc-950 p-4 pt-12">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-bold">{isNew ? 'New script' : 'Edit script'}</h1>
         <button type="button" onClick={onCancel} className="text-zinc-400 active:scale-95">
@@ -1865,7 +1865,7 @@ function PromptView({
   }
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-black">
+    <div className="ts-fade relative h-full w-full overflow-hidden bg-black">
       <video
         ref={videoRef}
         autoPlay
@@ -1913,7 +1913,7 @@ function PromptView({
             <div className="flex flex-1 items-center justify-center">
               <p
                 key={chunkIndex}
-                className="w-full animate-in fade-in slide-in-from-right-4 whitespace-pre-wrap text-center font-semibold text-white drop-shadow-lg duration-200"
+                className="ts-card w-full whitespace-pre-wrap text-center font-semibold text-white drop-shadow-lg"
                 style={{
                   fontSize: settings.fontSize,
                   lineHeight: settings.lineHeight,

@@ -53,3 +53,38 @@ button {
 .ts-go {
   animation: ts-go 0.4s ease-out;
 }
+
+/* View enter: subtle fade + rise with an ease-out-back curve for a springy
+   feel. Plays once when a view mounts (on navigation). */
+@keyframes ts-view {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.ts-view {
+  animation: ts-view 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Fade-only enter for the camera view (a transform would jolt the video). */
+@keyframes ts-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.ts-fade {
+  animation: ts-fade 0.28s ease-out;
+}
+
+/* Cue card advance: slide in from the right as each card changes. */
+@keyframes ts-card {
+  0% { opacity: 0; transform: translateX(24px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+.ts-card {
+  animation: ts-card 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Respect reduced-motion: disable the decorative view/card animations. */
+@media (prefers-reduced-motion: reduce) {
+  .ts-view, .ts-fade, .ts-card, .ts-pop, .ts-go {
+    animation: none;
+  }
+}
