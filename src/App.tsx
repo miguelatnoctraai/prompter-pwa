@@ -468,7 +468,7 @@ function ScriptListView({
 
       {scripts.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-5 px-8 text-center">
-          <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-sky-400 to-violet-500 text-4xl shadow-lg shadow-violet-500/20">
+          <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 text-4xl shadow-lg shadow-amber-500/30">
             🎬
           </div>
           <p className="max-w-xs text-lg text-zinc-300">
@@ -2031,7 +2031,7 @@ function PromptView({
 
       {isRecording && (
         <div className="pointer-events-none absolute inset-x-0 top-12 z-10 flex items-center justify-center gap-2 p-4">
-          <span className={`h-3 w-3 rounded-full ${isPaused ? 'bg-yellow-500' : 'animate-pulse bg-red-500'}`} />
+          <span className={`h-3 w-3 rounded-full ${isPaused ? 'bg-zinc-300' : 'animate-pulse bg-amber-400'}`} />
           <span className="rounded-md bg-black/40 px-2 py-1 font-mono text-sm text-white backdrop-blur-sm">
             {formatTime(elapsed)}
           </span>
@@ -2171,10 +2171,10 @@ function PromptView({
 
             <button
               onClick={startRecordingWithCountdown}
-              className="flex h-[76px] w-[76px] items-center justify-center rounded-full border-4 border-white/80 active:scale-95"
+              className="flex h-[76px] w-[76px] items-center justify-center rounded-full border-4 border-white/80 shadow-lg shadow-amber-500/40 active:scale-95"
               aria-label="Record"
             >
-              <span className="h-14 w-14 rounded-full bg-red-500" />
+              <span className="h-14 w-14 rounded-full bg-amber-400" />
             </button>
 
             <button
