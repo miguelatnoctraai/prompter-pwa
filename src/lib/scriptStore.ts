@@ -168,9 +168,15 @@ export async function fullSync(local: Script[]): Promise<Script[]> {
     if (!localCopy) {
       merged.set(remote.id, remote)
     } else if (remote.updatedAt > localCopy.updatedAt) {
-      // Remote wins on timestamp, but cueCards are localStorage-only (no DB
-      // column). Carry the local cueCards over so a sync doesn't erase them.
-      merged.set(remote.id, { ...remote, cueCards: localCopy.cueCards })
+      // Remote wins on timestamp. cueCards are localStorage-only (no DB
+      // column), so carry the local ones over — but only if the text didn't
+      // change remotely; cards built for different text would be stale.
+      const textUnchanged =
+        remote.hook === localCopy.hook && remote.body === localCopy.body
+      merged.set(remote.id, {
+        ...remote,
+        cueCards: textUnchanged ? localCopy.cueCards : undefined,
+      })
     }
   }
 

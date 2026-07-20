@@ -822,7 +822,11 @@ function EditScriptView({
   // toast restores the original text if they change their mind.
   const [previewing, setPreviewing] = useState(false)
   const [applied, setApplied] = useState(false)
-  const [undo, setUndo] = useState<{ hook: string; body: string } | null>(null)
+  const [undo, setUndo] = useState<{
+    hook: string
+    body: string
+    cueCards: string[] | null
+  } | null>(null)
   const undoTimerRef = useRef<number | null>(null)
 
   const spoken = `${hook} ${body}`.trim()
@@ -883,8 +887,10 @@ function EditScriptView({
 
   function useRewrite() {
     if (!score) return
-    // Stash the originals so a 5s undo can restore them.
-    setUndo({ hook, body })
+    // Stash the originals so a 5s undo can restore them — including the cue
+    // cards that were valid for that exact text (null if the text was edited
+    // after scoring, which is equally correct to restore).
+    setUndo({ hook, body, cueCards: pendingCueCards })
     onHookChange(score.rewrite_hook)
     onBodyChange(score.rewrite_body)
     setPendingCueCards(score.rewrite_cue_cards)
@@ -906,10 +912,14 @@ function EditScriptView({
     if (!undo) return
     onHookChange(undo.hook)
     onBodyChange(undo.body)
-    // The rewrite's cue cards no longer match — clear them so Focus mode
-    // falls back to the regex splitter for the original text.
-    setPendingCueCards(null)
-    onClearCueCards()
+    // Restore the cards that matched the restored text. The rewrite's cards
+    // no longer apply; the original ones (if any) do again.
+    setPendingCueCards(undo.cueCards)
+    if (undo.cueCards && undo.cueCards.length > 0) {
+      onPersistCueCards(undo.cueCards)
+    } else {
+      onClearCueCards()
+    }
     setUndo(null)
     setApplied(false)
     if (undoTimerRef.current) {
@@ -1030,6 +1040,13 @@ function EditScriptView({
           <p className="text-xs text-zinc-400">
             Estimated duration: ~{score.estimated_seconds}s
           </p>
+          {pendingCueCards && pendingCueCards.length > 0 && (
+            <p className="rounded-xl bg-sky-500/10 px-3 py-2 text-xs text-sky-200">
+              🎴 {pendingCueCards.length} cue cards ready — switch to{' '}
+              <span className="font-semibold">Cards</span> on the filming screen to read one
+              line at a time.
+            </p>
+          )}
           {score.strengths.length > 0 && (
             <div>
               <p className="mb-1 text-xs font-semibold text-emerald-400">Working well</p>
@@ -2135,20 +2152,28 @@ function PromptView({
             >
               ↺ Reset
             </button>
-            <div className="flex-1 text-center">
-              {settings.focusMode &&
-                (script.cueCards && script.cueCards.length > 0 ? (
-                  <span className="rounded-full bg-sky-500/20 px-3 py-1 text-xs font-semibold text-sky-200 backdrop-blur-sm">
-                    ✨ AI cue cards
-                  </span>
-                ) : (
-                  <button
-                    onClick={() => onUpdateSettings({ autoCueCards: !settings.autoCueCards })}
-                    className="rounded-full bg-white/15 px-3 py-1 text-xs text-white backdrop-blur-sm active:scale-95"
-                  >
-                    {settings.autoCueCards ? 'Auto cards' : 'Line breaks'}
-                  </button>
-                ))}
+            {/* Mode switch: scrolling teleprompter vs one-cue-card-at-a-time.
+                Always visible so cue cards are discoverable; sparkle marks
+                scripts that carry AI-generated cards from scoring. */}
+            <div className="flex flex-1 justify-center">
+              <div className="flex gap-0.5 rounded-full bg-white/10 p-0.5 backdrop-blur-sm">
+                <button
+                  onClick={() => onUpdateSettings({ focusMode: false })}
+                  className={`rounded-full px-3 py-1.5 text-xs active:scale-95 ${
+                    !settings.focusMode ? 'bg-white font-semibold text-black' : 'text-white/70'
+                  }`}
+                >
+                  Scroll
+                </button>
+                <button
+                  onClick={() => onUpdateSettings({ focusMode: true })}
+                  className={`rounded-full px-3 py-1.5 text-xs active:scale-95 ${
+                    settings.focusMode ? 'bg-white font-semibold text-black' : 'text-white/70'
+                  }`}
+                >
+                  {script.cueCards && script.cueCards.length > 0 ? '✨ Cards' : 'Cards'}
+                </button>
+              </div>
             </div>
             <button
               onClick={() => setShowTune(true)}
@@ -2239,12 +2264,12 @@ function PromptView({
                 />
               </label>
               <label className="flex items-center justify-between text-sm text-white/90">
-                Focus mode (one card at a time)
+                Auto-split cards at sentence breaks
                 <input
                   type="checkbox"
                   className="h-5 w-5"
-                  checked={settings.focusMode}
-                  onChange={(e) => onUpdateSettings({ focusMode: e.target.checked })}
+                  checked={settings.autoCueCards}
+                  onChange={(e) => onUpdateSettings({ autoCueCards: e.target.checked })}
                 />
               </label>
             </div>
