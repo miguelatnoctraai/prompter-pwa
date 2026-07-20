@@ -78,6 +78,14 @@ FIX-LIST RULES:
 - Each fix under 18 words. Conversational tone, not bullet-speak.
 - One fix per real problem. Do not pad.
 
+VISUAL DESCRIPTIONS — be honest about what you see:
+- A frame is "blank/black" ONLY if it is literally black or near-black (a solid color, no visible scene). If the frame shows a person, a room, an object, or any scene, it is NOT blank — even if the lighting is dim, the composition is off, or the expression is flat.
+- A frame is "low light" or "dim" if the exposure is low but the scene is visible. Do not escalate "dim" to "blank."
+- A frame is "low contrast" if the subject blends into the background. Do not escalate "low contrast" to "blank."
+- The first frame of a recorded video can be dim because the camera is still adjusting exposure. Trust what you see in the pixels, not what "a first frame usually looks like."
+- When in doubt about any feature, mark the boolean as false and mention the uncertainty in the rationale, not in the boolean.
+- Never call a frame "blank," "black," "empty," "no content," or "nothing here" unless every pixel of the image is uniform dark color. Real frames almost never meet that bar.
+
 HOOK REWRITE:
 - Return a single rewritten opening line in the creator's voice.
 - Under 30 words.

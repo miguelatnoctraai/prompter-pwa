@@ -4,13 +4,15 @@
 // Used by the post-record virality-score flow: the user has a recorded
 // video Blob in memory, we need a base64 JPEG to send to /api/score-video.
 //
-// Frame timing: we use currentTime = 0.0 by default. The spec called this
-// out as an open question — 0s vs 0.5s vs 1.0s. The default 0s is the
-// encoder's first I-frame. If a creator's videos have a "settling" beat
-// at the start (hand on lens, camera adjusting), the first frame may be
-// useless. Use `timeSeconds` to override.
+// Frame timing: the default 0.0s is the encoder's first I-frame, which on
+// TalkShot is BEFORE the 3-2-1 countdown ends. The first I-frame is often
+// dim (camera hasn't fully exposed) and not representative of the user's
+// actual opening frame. The default 4.0s is past the countdown + ~1s
+// buffer. For very short takes (< 4s) we fall back to 0.5s, which is past
+// any encoder I-frame weirdness but still in the first second of footage.
+// Use `timeSeconds` to override.
 export interface ExtractFirstFrameOptions {
-  /** Override the frame timestamp in seconds. Default 0.0. */
+  /** Override the frame timestamp in seconds. */
   timeSeconds?: number
   /** Max edge in pixels (downscale to fit). Default 768. */
   maxEdge?: number
@@ -24,6 +26,8 @@ export interface ExtractedFrame {
   width: number
   height: number
   approxBytes: number
+  /** The timestamp (in seconds) actually used for extraction. */
+  timeSeconds: number
 }
 
 /**
@@ -35,7 +39,6 @@ export async function extractFirstFrame(
   blob: Blob,
   options: ExtractFirstFrameOptions = {},
 ): Promise<ExtractedFrame | null> {
-  const timeSeconds = options.timeSeconds ?? 0
   const maxEdge = options.maxEdge ?? 768
   const quality = options.quality ?? 0.7
 
@@ -51,13 +54,35 @@ export async function extractFirstFrame(
 
   try {
     await waitForMetadata(video)
-    // Some Android recordings have the first I-frame at t=0 with a duration
-    // of 0 (the encoder's "still" frame). If duration > 0 and the requested
-    // time is within it, seek there; otherwise use the first decodable frame.
-    const seekTo = video.duration > 0 && timeSeconds <= video.duration
-      ? timeSeconds
-      : 0
-    await seekVideo(video, seekTo)
+    // Pick the best frame timestamp:
+    // - If caller provided one, use it.
+    // - If the video is at least 4s long, use 4.0s (past the 3-2-1 countdown
+    //   + 1s buffer). This is the user's actual opening frame.
+    // - Otherwise (very short take, dropped recording, etc.) use 0.5s.
+    //   0.5s is past the encoder I-frame artifact window but still in the
+    //   first second, so the frame is representative of the take.
+    let requestedTime: number
+    if (typeof options.timeSeconds === 'number') {
+      requestedTime = options.timeSeconds
+    } else if (video.duration > 0 && video.duration >= 4) {
+      requestedTime = 4.0
+    } else if (video.duration > 0) {
+      requestedTime = Math.min(0.5, Math.max(0, video.duration - 0.1))
+    } else {
+      // Unknown duration — fall back to 4.0; if the seek fails we'll retry.
+      requestedTime = 4.0
+    }
+    let actualTime = await seekVideo(video, requestedTime)
+    // If the seek failed (e.g. very short clip), try 0.5s, then 0.0s.
+    if (actualTime === null) {
+      actualTime = await seekVideo(video, 0.5)
+    }
+    if (actualTime === null) {
+      actualTime = await seekVideo(video, 0)
+    }
+    if (actualTime === null) {
+      return null
+    }
 
     const srcW = video.videoWidth
     const srcH = video.videoHeight
@@ -89,6 +114,7 @@ export async function extractFirstFrame(
       width: dstW,
       height: dstH,
       approxBytes,
+      timeSeconds: actualTime,
     }
   } catch {
     return null
@@ -128,20 +154,21 @@ function waitForMetadata(video: HTMLVideoElement): Promise<void> {
   })
 }
 
-function seekVideo(video: HTMLVideoElement, time: number): Promise<void> {
-  return new Promise((resolve, reject) => {
-    // Some browsers don't fire 'seeked' if the video is already at `time`.
-    if (video.currentTime === time) {
-      resolve()
+function seekVideo(video: HTMLVideoElement, time: number): Promise<number | null> {
+  return new Promise((resolve) => {
+    // Some browsers don't fire 'seeked' if the video is already at `time`,
+    // or if `time` is past the duration. Guard both.
+    if (video.duration > 0 && time > video.duration) {
+      resolve(null)
       return
     }
     const onSeeked = () => {
       cleanup()
-      resolve()
+      resolve(video.currentTime)
     }
     const onError = () => {
       cleanup()
-      reject(new Error('Video seek failed'))
+      resolve(null)
     }
     const cleanup = () => {
       video.removeEventListener('seeked', onSeeked)
@@ -149,10 +176,16 @@ function seekVideo(video: HTMLVideoElement, time: number): Promise<void> {
     }
     video.addEventListener('seeked', onSeeked, { once: true })
     video.addEventListener('error', onError, { once: true })
-    video.currentTime = time
+    try {
+      video.currentTime = time
+    } catch {
+      cleanup()
+      resolve(null)
+      return
+    }
     setTimeout(() => {
       cleanup()
-      reject(new Error('Video seek timed out'))
+      resolve(null)
     }, 5000)
   })
 }
