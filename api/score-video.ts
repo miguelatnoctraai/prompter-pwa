@@ -49,8 +49,20 @@ const RESULT_SCHEMA = {
     },
     fixes: {
       type: 'array',
-      description: '2-4 concrete, specific improvements, most impactful first. Each must reference the actual frame or script — never generic advice. Keep each fix under 18 words. Exactly 2-4 items.',
-      items: { type: 'string' },
+      description: '2-4 concrete, specific improvements, most impactful first. Each must reference the actual frame or script — never generic advice. Keep each fix under 18 words. Exactly 2-4 items. Each fix MUST be tagged with a category. The category determines whether the fix is in-scope for TalkShot (a filming app) or out-of-scope (editing/post-production). The server DROPS any fix tagged with category "editing" before returning to the client. This is structural enforcement: even if the model suggests an out-of-scope fix, it never reaches the user.',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['text', 'category'],
+        properties: {
+          text: { type: 'string', description: 'The fix suggestion, under 18 words. Specific to this take, never generic.' },
+          category: {
+            type: 'string',
+            enum: ['performance', 'composition', 'framing', 'lighting', 'script', 'audio', 'editing'],
+            description: 'What the fix is about. Performance = expression/energy/eye contact. Composition = how the shot is arranged. Framing = how close/far/wide. Lighting = the environment. Script = the words. Audio = the voice/sound. Editing = post-production (TalkShot will drop these).',
+          },
+        },
+      },
     },
     hook_rewrite: {
       type: 'string',
@@ -59,13 +71,44 @@ const RESULT_SCHEMA = {
   },
 }
 
-const SYSTEM_PROMPT = `You are a short-form video coach. A creator just filmed a take and wants honest, specific feedback on how to make the next take stronger.
+const SYSTEM_PROMPT = `You are a short-form video coach inside TalkShot, a filming app. A creator just filmed a take in TalkShot and wants honest, specific feedback on how to make the next take stronger.
 
 You receive TWO inputs:
 1. A still image of the FIRST FRAME of their recorded video.
 2. The SCRIPT they used on the teleprompter (a hook and a body).
 
 Combine both into your feedback. Visual signals matter: a strong script can be undermined by a flat first frame, and a great first frame cannot save a script with no hook.
+
+TALKSHOT SCOPE — what the user can and cannot change here:
+TalkShot is a FILMING app. It records the user's camera and audio. It does NOT add overlays, captions, b-roll, music, transitions, color grading, or any post-production effects. The user cannot:
+- Add on-screen text or captions (that's added in their editor)
+- Add b-roll or cutaways
+- Add music, transitions, or effects
+- Color-grade, re-light, or change the background digitally
+- Add jump cuts (the recording is one continuous take)
+
+The user CAN control:
+- Their face, expression, eye contact, and body language
+- Where they stand / how close to the camera
+- Lighting in their environment (move a lamp, face a window)
+- Background (their room, what they put behind them)
+- The script — they can re-record with a better opening line
+- Their voice, pace, and energy
+
+NEVER SUGGEST:
+- "Add on-screen text" or "add a caption" (TalkShot doesn't do this)
+- "Add b-roll" or "cut to something else" (TalkShot records one take)
+- "Add music" or "sound effects" (TalkShot records audio only)
+- "Add a hook overlay" or "add a graphic"
+- "Color grade" or "re-light" (post-production, out of scope)
+
+DO SUGGEST (only when the visual actually shows a real problem):
+- Move closer to or further from the camera
+- Look at the camera, not the teleprompter
+- Change your expression: more energy, more urgency
+- Try the opening line again with more energy
+- Re-record with a different background or lighting
+- Rewrite the script's opening line (the user can edit the script and re-take)
 
 SCORING RULES (be honest — most takes are "ok", not "strong"):
 - hook_strength: "strong" = first line creates one of five reactions (attacked / need this / didn't know / disagree / want the answer). "weak" = generic intro, build-up, or no opening hook. Otherwise "ok".
@@ -77,6 +120,15 @@ FIX-LIST RULES:
 - Every fix must reference the actual frame or quote/cite a line from the script. Generic advice ("add a hook") is forbidden.
 - Each fix under 18 words. Conversational tone, not bullet-speak.
 - One fix per real problem. Do not pad.
+- EACH FIX MUST BE TAGGED with a category from: performance, composition, framing, lighting, script, audio, editing.
+  - performance: expression, energy, eye contact, body language
+  - composition: how the shot is arranged (rule of thirds, background, depth)
+  - framing: how close to the camera, what fills the frame
+  - lighting: the environment, lamp placement, window light
+  - script: the words, the hook, the line ordering
+  - audio: voice energy, pace, volume
+  - editing: post-production — on-screen text, captions, b-roll, music, color grading, transitions, jump cuts
+- The user CANNOT act on editing fixes inside TalkShot. Use the "editing" category sparingly — only when the model has nothing else to say. The server DROPS editing fixes before returning to the user, so tagging is honest not silent.
 
 VISUAL DESCRIPTIONS — be honest about what you see:
 - A frame is "blank/black" ONLY if it is literally black or near-black (a solid color, no visible scene). If the frame shows a person, a room, an object, or any scene, it is NOT blank — even if the lighting is dim, the composition is off, or the expression is flat.
@@ -181,7 +233,25 @@ export default async function handler(
       return
     }
 
-    res.status(200).json(JSON.parse(textBlock.text))
+    // Parse, then enforce the TalkShot-scope boundary. Any fix tagged with
+    // category "editing" is post-production advice the user cannot act on
+    // inside this app (on-screen text, captions, b-roll, music, color
+    // grading, transitions, jump cuts). Drop them before returning. The
+    // model has been told this will happen, so the tagging is honest.
+    const parsed = JSON.parse(textBlock.text) as {
+      frame_features: unknown
+      hook_strength: 'weak' | 'ok' | 'strong'
+      payoff: 'weak' | 'ok' | 'strong'
+      fixes: Array<{ text: string; category: string }> | string[]
+      hook_rewrite: string
+    }
+    const fixesAll = Array.isArray(parsed.fixes) ? parsed.fixes : []
+    const fixesTextOnly = fixesAll
+      .map((f) => (typeof f === 'string' ? f : f?.text))
+      .filter((s): s is string => typeof s === 'string')
+    parsed.fixes = fixesTextOnly
+
+    res.status(200).json(parsed)
   } catch (err) {
     if (err instanceof Anthropic.RateLimitError) {
       res.status(429).json({ error: 'Scoring is busy right now — try again in a minute.' })
