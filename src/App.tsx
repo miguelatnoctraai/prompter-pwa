@@ -1316,10 +1316,6 @@ function PromptView({
   const startTimeRef = useRef<number>(0)
   const timerRef = useRef<number | null>(null)
   const progressRef = useRef(0)
-  // Long-press timer for stop: holding the Pause/Resume button for ~600ms
-  // prompts to stop the take, keeping the destructive action out of the
-  // quick-tap thumb path.
-  const stopPressTimer = useRef<number | null>(null)
   const rafRef = useRef<number | null>(null)
 
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
@@ -1514,7 +1510,6 @@ function PromptView({
     return () => {
       streamRef.current?.getTracks().forEach((track) => track.stop())
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
-      if (stopPressTimer.current) window.clearTimeout(stopPressTimer.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facingMode])
@@ -1833,25 +1828,6 @@ function PromptView({
     setIsRecording(false)
     setIsPaused(false)
     setPlaying(false)
-  }
-
-  // Long-press the Pause/Resume button to stop. A quick tap stays a
-  // pause/resume; holding ~600ms triggers a confirm-to-stop so the
-  // destructive action can't be hit by accident in the thumb zone.
-  function beginStopPress() {
-    if (stopPressTimer.current) window.clearTimeout(stopPressTimer.current)
-    stopPressTimer.current = window.setTimeout(() => {
-      stopPressTimer.current = null
-      const ok = window.confirm('Stop and end this take?')
-      if (ok) stopRecording()
-    }, 600)
-  }
-
-  function cancelStopPress() {
-    if (stopPressTimer.current) {
-      window.clearTimeout(stopPressTimer.current)
-      stopPressTimer.current = null
-    }
   }
 
   async function shareVideo() {
@@ -2312,24 +2288,30 @@ function PromptView({
         </div>
       ) : isRecording ? (
         <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-4 pb-10">
-          <div className="mb-5 flex min-h-[28px] items-center justify-center gap-2">
-            {settings.focusMode && (
-              <span className="rounded-full bg-black/50 px-4 py-1 text-sm font-semibold text-white backdrop-blur-sm">
-                {chunkIndex + 1} / {chunks.length}
-              </span>
-            )}
-            <span className="rounded-full bg-black/30 px-3 py-1 text-xs text-white/70 backdrop-blur-sm">
-              Hold to stop
-            </span>
+          <div className="mb-5 flex min-h-[28px] items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              {settings.focusMode && (
+                <span className="rounded-full bg-black/50 px-4 py-1 text-sm font-semibold text-white backdrop-blur-sm">
+                  {chunkIndex + 1} / {chunks.length}
+                </span>
+              )}
+            </div>
+            {/* Dedicated Stop button. Single tap ends the take; the review
+                screen's Retake is the safety net for accidental taps. The
+                earlier long-press-to-stop model was invisible to anyone who
+                didn't already know about it. */}
+            <button
+              type="button"
+              onClick={stopRecording}
+              aria-label="Stop and review recording"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500 text-white shadow-lg shadow-red-500/30 active:scale-95"
+            >
+              <span className="block h-4 w-4 rounded-sm bg-white" />
+            </button>
           </div>
           <div className="flex items-center justify-center">
             <button
               onClick={isPaused ? resumeRecording : pauseRecording}
-              onTouchStart={beginStopPress}
-              onTouchEnd={cancelStopPress}
-              onMouseDown={beginStopPress}
-              onMouseUp={cancelStopPress}
-              onMouseLeave={cancelStopPress}
               className="flex h-[76px] w-[76px] items-center justify-center rounded-full bg-white text-3xl text-black shadow-lg active:scale-95"
               aria-label={isPaused ? 'Resume recording' : 'Pause recording'}
             >
