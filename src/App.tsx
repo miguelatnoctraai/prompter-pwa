@@ -302,7 +302,7 @@ function PresetPicker({
             type="button"
             onClick={() => onChange(p.value)}
             className={`flex-1 rounded-full py-2 text-sm transition-colors active:scale-95 ${
-              i === activeIdx ? 'bg-white font-semibold text-black' : 'text-white/70'
+              i === activeIdx ? 'btn-segment-active' : 'text-white/70'
             }`}
           >
             {p.label}
@@ -458,7 +458,7 @@ function ScriptListView({
                   setShowBetaBlurDialog(false)
                   onUpdateSettings({ backgroundBlur: true })
                 }}
-                className="rounded-full bg-sky-500 px-6 py-3 font-semibold text-white active:scale-95"
+                className="rounded-full btn-primary px-6 py-3 font-semibold active:scale-95"
               >
                 Enable anyway
               </button>
@@ -485,7 +485,7 @@ function ScriptListView({
           <button
             type="button"
             onClick={onCreate}
-            className="rounded-full bg-white px-7 py-3.5 font-semibold text-black shadow-lg shadow-white/10 active:scale-95"
+            className="rounded-full btn-primary px-7 py-3.5 font-semibold active:scale-95"
           >
             Write your first script
           </button>
@@ -508,7 +508,7 @@ function ScriptListView({
                 <button
                   type="button"
                   onClick={() => onPrompt(script)}
-                  className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-black shadow-md shadow-white/10 active:scale-95"
+                  className="rounded-full btn-primary px-5 py-2.5 text-sm font-bold active:scale-95"
                 >
                   Prompt
                 </button>
@@ -548,7 +548,7 @@ function ScriptListView({
       <button
         type="button"
         onClick={onCreate}
-        className="absolute bottom-6 right-6 flex h-14 w-14 items-center justify-center rounded-full bg-white text-2xl font-bold text-black shadow-lg shadow-white/10 active:scale-95"
+        className="absolute bottom-6 right-6 flex h-14 w-14 items-center justify-center rounded-full btn-primary text-2xl font-bold active:scale-95"
         aria-label="New script"
       >
         +
@@ -683,7 +683,7 @@ function AccountView({
             type="button"
             onClick={syncNow}
             disabled={busy}
-            className="w-full rounded-full bg-white py-3 font-semibold text-black disabled:opacity-40 active:scale-95"
+            className="w-full rounded-full btn-primary py-3 font-semibold disabled:opacity-40 active:scale-95"
           >
             {busy ? 'Syncing…' : lastSyncAt ? `Sync now (${formatSyncTime(lastSyncAt)})` : 'Sync now'}
           </button>
@@ -729,7 +729,7 @@ function AccountView({
               type="button"
               onClick={sendCode}
               disabled={busy || !email.includes('@')}
-              className="w-full rounded-full bg-white py-3 font-semibold text-black disabled:opacity-40 active:scale-95"
+              className="w-full rounded-full btn-primary py-3 font-semibold disabled:opacity-40 active:scale-95"
             >
               {busy ? 'Sending…' : 'Send code'}
             </button>
@@ -739,7 +739,7 @@ function AccountView({
                 type="button"
                 onClick={verifyCode}
                 disabled={busy || code.trim().length < 6}
-                className="w-full rounded-full bg-white py-3 font-semibold text-black disabled:opacity-40 active:scale-95"
+                className="w-full rounded-full btn-primary py-3 font-semibold disabled:opacity-40 active:scale-95"
               >
                 {busy ? 'Verifying…' : 'Verify code'}
               </button>
@@ -998,14 +998,14 @@ function EditScriptView({
         <div className="mt-3">
           <div className="mb-1.5 flex items-center justify-between text-xs">
             <span className="text-zinc-400">{wordCount} words</span>
-            <span className={tooLong ? 'font-semibold text-amber-300' : 'font-semibold text-white'}>
+            <span className={tooLong ? 'font-semibold text-orange-400' : 'font-semibold text-white'}>
               ~{readSeconds}s · {zone}
             </span>
           </div>
           <div className="relative h-2 w-full rounded-full atmosphere-chip">
             <div
               className={`h-full rounded-full transition-all duration-300 ${
-                tooLong ? 'bg-amber-400' : 'bg-gradient-to-r from-sky-400 to-violet-500'
+                tooLong ? 'bg-orange-500' : 'bg-gradient-to-r from-sky-400 to-violet-500'
               }`}
               style={{ width: `${meterPct}%` }}
             />
@@ -1128,7 +1128,7 @@ function EditScriptView({
                     <button
                       type="button"
                       onClick={useRewrite}
-                      className="flex-1 rounded-full bg-sky-500 py-2.5 text-sm font-semibold text-white active:scale-95"
+                      className="flex-1 rounded-full btn-primary py-2.5 text-sm font-semibold active:scale-95"
                     >
                       Use rewrite
                     </button>
@@ -1143,7 +1143,7 @@ function EditScriptView({
                     <button
                       type="button"
                       onClick={previewRewrite}
-                      className="mt-2 w-full rounded-full bg-sky-500 py-2 text-sm font-semibold text-white active:scale-95"
+                      className="mt-2 w-full rounded-full btn-secondary py-2 text-sm font-semibold active:scale-95"
                     >
                       Preview rewrite
                     </button>
@@ -1163,7 +1163,7 @@ function EditScriptView({
           <button
             type="button"
             onClick={undoRewrite}
-            className="rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-black active:scale-95"
+            className="rounded-full btn-primary px-4 py-1.5 text-sm font-semibold active:scale-95"
           >
             Undo
           </button>
@@ -1183,7 +1183,7 @@ function EditScriptView({
           type="button"
           onClick={() => onSave(pendingCueCards)}
           disabled={!body.trim()}
-          className="flex-[2] rounded-full bg-white py-4 font-semibold text-black disabled:opacity-40 active:scale-95"
+          className="flex-[2] rounded-full btn-primary py-4 font-semibold disabled:opacity-40 active:scale-95"
         >
           Save
         </button>
@@ -2125,7 +2125,7 @@ function PromptView({
               </button>
               <button
                 onClick={shareVideo}
-                className="rounded-full bg-white px-6 py-3 font-semibold text-black active:scale-95"
+                className="rounded-full btn-primary px-6 py-3 font-semibold active:scale-95"
               >
                 Share video
               </button>
@@ -2184,7 +2184,7 @@ function PromptView({
                 <button
                   onClick={() => onUpdateSettings({ focusMode: false })}
                   className={`rounded-full px-4 py-2.5 text-xs active:scale-95 ${
-                    !settings.focusMode ? 'bg-white font-semibold text-black' : 'text-white/70'
+                    !settings.focusMode ? 'btn-segment-active' : 'text-white/70'
                   }`}
                 >
                   Scroll
@@ -2192,7 +2192,7 @@ function PromptView({
                 <button
                   onClick={() => onUpdateSettings({ focusMode: true })}
                   className={`rounded-full px-4 py-2.5 text-xs active:scale-95 ${
-                    settings.focusMode ? 'bg-white font-semibold text-black' : 'text-white/70'
+                    settings.focusMode ? 'btn-segment-active' : 'text-white/70'
                   }`}
                 >
                   {script.cueCards && script.cueCards.length > 0 ? '✨ Cards' : 'Cards'}

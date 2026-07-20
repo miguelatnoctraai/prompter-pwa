@@ -18,6 +18,21 @@
   --brand-from: #fbbf24;    /* amber-400 */
   --brand-to: #f97316;      /* orange-500 */
   --brand-glow: rgba(251, 191, 36, 0.10); /* top-anchored radial wash */
+
+  /* Scope 2: amber as a system. Amber-400 IS the primary action color
+     across the app. White text on amber-400 fails AA (1.6:1) — never use
+     that pairing. Use near-black text on amber-400 instead (9.4:1). */
+  --btn-primary-bg: #fbbf24;          /* amber-400 */
+  --btn-primary-bg-hover: #f59e0b;    /* amber-500 */
+  --btn-primary-bg-active: #d97706;   /* amber-600 (pressed) */
+  --btn-primary-text: #0c0a09;        /* near-black — passes AA on amber-400 */
+
+  /* Warning color (formerly amber). The duration meter is the only warning
+     surface in the app; once amber means "primary," warning must move to a
+     hotter hue. orange-500 is the new warning color, red-500 for escalation. */
+  --btn-warning-strong: #ef4444;      /* red-500 */
+  --btn-warning-text: #fb923c;        /* orange-400 */
+  --btn-warning-fill: #f97316;        /* orange-500 */
 }
 
 html,
@@ -97,6 +112,46 @@ button {
    warm surface (6.4:1). Replaces text-zinc-500 on atmosphere surfaces. */
 .text-muted {
   color: var(--text-muted);
+}
+
+/* Primary action button — amber fill, near-black text. Compose with shape
+   utilities (rounded-full, px-*, py-*) and active:scale-95 at the call site.
+   The fill IS the signal: no shadow decoration needed. */
+.btn-primary {
+  background-color: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  transition: background-color 120ms ease-out, transform 120ms ease-out;
+}
+.btn-primary:hover {
+  background-color: var(--btn-primary-bg-hover);
+}
+.btn-primary:active {
+  background-color: var(--btn-primary-bg-active);
+}
+.btn-primary:disabled {
+  opacity: 0.4;
+}
+
+/* Secondary button — same as atmosphere-chip but in button form. Use for
+   utilities and non-core-loop actions. */
+.btn-secondary {
+  background-color: var(--surface);
+  background-image: linear-gradient(
+    180deg,
+    var(--surface-top) 0%,
+    var(--surface) 60%
+  );
+  border: 1px solid var(--border-warm);
+  color: var(--text-body);
+  transition: transform 120ms ease-out;
+}
+
+/* Segmented control active state. Replaces the bg-white active pill on
+   PresetPicker + the Scroll|Cards mode switch. */
+.btn-segment-active {
+  background-color: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  font-weight: 600;
 }
 
 /* Hide scrollbar for teleprompter text area */
