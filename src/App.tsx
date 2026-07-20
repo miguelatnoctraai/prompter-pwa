@@ -2097,8 +2097,10 @@ function PromptView({
             playsInline
             className="absolute inset-0 h-full w-full object-cover"
           />
-          {/* Legibility gradient behind the controls (bottom thumb zone). */}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/90 via-black/50 to-transparent" />
+          {/* Legibility gradient behind the controls (bottom thumb zone).
+              Picks up a trace of the amber cast so the review screen feels
+              like the system is in 'payoff' state, not a generic overlay. */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-[#1c0e08]/95 via-[#0c0a09]/70 to-transparent" />
 
           {/* Replay affordance, top-center, out of the thumb zone. */}
           <button
@@ -2117,7 +2119,7 @@ function PromptView({
           </button>
 
           <div className="relative z-10 w-full max-w-sm px-6 pb-10 text-center">
-            <p className="mb-1 text-lg font-semibold drop-shadow-lg">How did it look?</p>
+            <p className="ts-view font-display mb-1 text-lg font-bold drop-shadow-lg">How did it look?</p>
             <p className="mb-4 text-sm text-zinc-300 drop-shadow">
               Save it, or take it again.
             </p>
