@@ -2,6 +2,22 @@
 
 :root {
   color-scheme: dark;
+
+  /* Scope 1 atmosphere tokens.
+     Warm near-black family — every screen, surface, and border pulls from here.
+     Tinting travels together (warm page, warm cards, warm borders). */
+  --bg-base: #0c0a09;       /* warm near-black, page-bottom of the gradient */
+  --bg-top: #1a1411;        /* warm top of the page gradient */
+  --surface: #1a1614;       /* raised surface — cards, panels, sheets */
+  --surface-top: #221c19;   /* top-lit highlight inside a surface */
+  --border-warm: rgba(255, 235, 210, 0.10); /* 1px warm hairline */
+  --text-muted: #9a9a9a;    /* secondary text — between zinc-400 and the old zinc-500, hits 6.4:1 on surface */
+  --text-body: #d6d3d1;     /* stone-300 — primary text on surfaces */
+
+  /* Brand accent — kept from existing amber-400 / orange-500 family. */
+  --brand-from: #fbbf24;    /* amber-400 */
+  --brand-to: #f97316;      /* orange-500 */
+  --brand-glow: rgba(251, 191, 36, 0.10); /* top-anchored radial wash */
 }
 
 html,
@@ -14,6 +30,59 @@ body,
   background: black;
 }
 
+/* Shared atmosphere page background.
+   Static CSS gradient — no filter: blur, no animated layers (brief pitfall:
+   large blurred elements cause scroll jank on low-end phones). */
+.atmosphere-page {
+  background-color: var(--bg-base);
+  background-image:
+    radial-gradient(
+      120% 80% at 50% -10%,
+      var(--brand-glow) 0%,
+      transparent 55%
+    ),
+    linear-gradient(180deg, var(--bg-top) 0%, var(--bg-base) 100%);
+}
+
+/* Shared elevated surface.
+   Top-lit gradient (subtle white-warm 6% → transparent) + 1px warm border
+   + soft shadow. Apply identically to every card, panel, and sheet. */
+.atmosphere-surface {
+  background-color: var(--surface);
+  background-image: linear-gradient(
+    180deg,
+    var(--surface-top) 0%,
+    var(--surface) 60%
+  );
+  border: 1px solid var(--border-warm);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
+    0 8px 24px -8px rgba(0, 0, 0, 0.6);
+}
+
+/* Sheet variant of the elevated surface — same tokens, 95% alpha so the
+   camera feed reads through behind the sheet (the one place blur is
+   appropriate per the Scope 1 brief). */
+.atmosphere-sheet {
+  background-color: rgba(26, 22, 20, 0.95);
+  background-image: linear-gradient(
+    180deg,
+    rgba(34, 28, 25, 0.95) 0%,
+    rgba(26, 22, 20, 0.95) 60%
+  );
+  border-top: 1px solid var(--border-warm);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
+    0 -8px 24px -8px rgba(0, 0, 0, 0.6);
+}
+
+/* Inner chip / pill — one step lighter than surface, same warm cast.
+   Used for the small metadata pills inside script cards. */
+.atmosphere-chip {
+  background-color: #221c19;
+  border: 1px solid var(--border-warm);
+}
+
 video {
   object-fit: cover;
   width: 100%;
@@ -22,6 +91,12 @@ video {
 
 button {
   touch-action: manipulation;
+}
+
+/* Muted text token — uses --text-muted, the lowest legible tier on the
+   warm surface (6.4:1). Replaces text-zinc-500 on atmosphere surfaces. */
+.text-muted {
+  color: var(--text-muted);
 }
 
 /* Hide scrollbar for teleprompter text area */

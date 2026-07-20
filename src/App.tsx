@@ -338,14 +338,14 @@ function ScriptListView({
   const [showBetaBlurDialog, setShowBetaBlurDialog] = useState(false)
 
   return (
-    <div className="ts-view flex h-full flex-col bg-zinc-950 p-4 pt-12">
+    <div className="ts-view atmosphere-page flex h-full flex-col p-4 pt-12">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold">TalkShot</h1>
         <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={onAccount}
-          className="relative flex items-center gap-2 rounded-full bg-zinc-800 px-3 py-2 text-sm text-white active:scale-95"
+          className="relative flex items-center gap-2 rounded-full atmosphere-chip px-3 py-2 text-sm text-white active:scale-95"
           aria-label="Account"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -362,7 +362,7 @@ function ScriptListView({
         <button
           type="button"
           onClick={() => setShowSettings((s) => !s)}
-          className="rounded-full bg-zinc-800 p-3 text-white active:scale-95"
+          className="rounded-full atmosphere-chip p-3 text-white active:scale-95"
           aria-label="Settings"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -374,7 +374,7 @@ function ScriptListView({
       </div>
 
       {showSettings && (
-        <div className="mb-4 rounded-2xl bg-zinc-900 p-4">
+        <div className="mb-4 rounded-2xl atmosphere-surface p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Default display</h2>
             <button
@@ -446,7 +446,7 @@ function ScriptListView({
 
       {showBetaBlurDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6">
-          <div className="max-w-sm rounded-2xl bg-zinc-900/90 p-6 text-center backdrop-blur-xl">
+          <div className="max-w-sm rounded-2xl atmosphere-surface p-6 text-center">
             <h3 className="mb-2 text-lg font-bold text-white">Beta: background blur</h3>
             <p className="mb-4 text-sm text-zinc-300">
               This feature uses AI to blur your background in real time. It may heat up your phone, reduce frame rate, or have rough edges around hair. Turn it off if performance drops.
@@ -465,7 +465,7 @@ function ScriptListView({
               <button
                 type="button"
                 onClick={() => setShowBetaBlurDialog(false)}
-                className="rounded-full bg-zinc-800 px-6 py-3 font-semibold text-white active:scale-95"
+                className="rounded-full atmosphere-chip px-6 py-3 font-semibold text-white active:scale-95"
               >
                 Cancel
               </button>
@@ -495,7 +495,7 @@ function ScriptListView({
           {scripts.map((script) => (
             <div
               key={script.id}
-              className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900 to-zinc-950 p-4 shadow-sm transition-transform active:scale-[0.98]"
+              className="group relative overflow-hidden rounded-2xl atmosphere-surface p-4 transition-transform active:scale-[0.98]"
             >
               <div className="flex items-center justify-between">
                 <div className="min-w-0 flex-1 pr-3">
@@ -514,24 +514,24 @@ function ScriptListView({
                 </button>
               </div>
 
-              <div className="mt-3 flex items-center gap-2 text-xs text-zinc-500">
-                <span className="rounded-full bg-zinc-800 px-2.5 py-1">
+              <div className="mt-3 flex items-center gap-2 text-xs text-muted">
+                <span className="rounded-full atmosphere-chip px-2.5 py-1">
                   {countWords(script.hook + ' ' + script.body)} words
                 </span>
-                <span className="rounded-full bg-zinc-800 px-2.5 py-1">
+                <span className="rounded-full atmosphere-chip px-2.5 py-1">
                   {formatRelativeTime(script.updatedAt)}
                 </span>
                 <button
                   type="button"
                   onClick={() => onEdit(script)}
-                  className="ml-auto rounded-full bg-zinc-800 px-4 py-2.5 font-medium text-zinc-200 active:scale-95"
+                  className="ml-auto rounded-full atmosphere-chip px-4 py-2.5 font-medium text-zinc-200 active:scale-95"
                 >
                   Edit
                 </button>
                 <button
                   type="button"
                   onClick={() => onDelete(script.id)}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-800 text-zinc-400 active:scale-95"
+                  className="flex h-10 w-10 items-center justify-center rounded-full atmosphere-chip text-zinc-400 active:scale-95"
                   aria-label="Delete"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -656,7 +656,7 @@ function AccountView({
   }
 
   return (
-    <div className="ts-view flex h-full flex-col bg-zinc-950 p-4 pt-12">
+    <div className="ts-view atmosphere-page flex h-full flex-col p-4 pt-12">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-bold">Account</h1>
         <button type="button" onClick={onBack} className="-m-2 p-2 text-zinc-400 active:scale-95">
@@ -665,13 +665,13 @@ function AccountView({
       </div>
 
       {!supabase ? (
-        <div className="rounded-2xl bg-zinc-900 p-4 text-zinc-400">
+        <div className="rounded-2xl atmosphere-surface p-4 text-zinc-400">
           <p>Cloud sync is not configured for this build.</p>
           <p className="mt-2 text-sm">Scripts are stored on this device only.</p>
         </div>
       ) : stage === 'signedIn' || session ? (
         <div className="space-y-4">
-          <div className="rounded-2xl bg-zinc-900 p-4">
+          <div className="rounded-2xl atmosphere-surface p-4">
             <p className="text-sm text-zinc-400">Signed in as</p>
             <p className="font-semibold">{session?.user.email}</p>
           </div>
@@ -691,7 +691,7 @@ function AccountView({
             type="button"
             onClick={signOut}
             disabled={busy}
-            className="w-full rounded-full bg-zinc-800 py-3 font-semibold text-white disabled:opacity-40 active:scale-95"
+            className="w-full rounded-full atmosphere-chip py-3 font-semibold text-white disabled:opacity-40 active:scale-95"
           >
             Sign out
           </button>
@@ -710,7 +710,7 @@ function AccountView({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             disabled={stage === 'code' || busy}
-            className="w-full rounded-xl bg-zinc-900 px-4 py-3 placeholder-zinc-500 outline-none disabled:opacity-60"
+            className="w-full rounded-xl atmosphere-surface px-4 py-3 placeholder-zinc-500 outline-none disabled:opacity-60"
           />
           {stage === 'code' && (
             <input
@@ -721,7 +721,7 @@ function AccountView({
               value={code}
               onChange={(e) => setCode(e.target.value)}
               disabled={busy}
-              className="w-full rounded-xl bg-zinc-900 px-4 py-3 text-center text-xl tracking-widest placeholder-zinc-500 outline-none disabled:opacity-60"
+              className="w-full rounded-xl atmosphere-surface px-4 py-3 text-center text-xl tracking-widest placeholder-zinc-500 outline-none disabled:opacity-60"
             />
           )}
           {stage === 'email' ? (
@@ -767,7 +767,7 @@ function AccountView({
               ? 'bg-emerald-500/15 text-emerald-300'
               : message.type === 'error'
                 ? 'bg-red-500/15 text-red-300'
-                : 'bg-zinc-800 text-zinc-300'
+                : 'atmosphere-chip text-zinc-300'
           }`}
         >
           {message.text}
@@ -953,7 +953,7 @@ function EditScriptView({
   }, [])
 
   return (
-    <div className="ts-view flex h-full flex-col bg-zinc-950 p-4 pt-12">
+    <div className="ts-view atmosphere-page flex h-full flex-col p-4 pt-12">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-bold">{isNew ? 'New script' : 'Edit script'}</h1>
         <button type="button" onClick={onCancel} className="-m-2 p-2 text-zinc-400 active:scale-95">
@@ -965,7 +965,7 @@ function EditScriptView({
         placeholder="Script title (only you see this)"
         value={title}
         onChange={(e) => onTitleChange(e.target.value)}
-        className="mb-3 rounded-xl bg-zinc-900 px-4 py-3 text-lg font-semibold placeholder-zinc-500 outline-none"
+        className="mb-3 rounded-xl atmosphere-surface px-4 py-3 text-lg font-semibold placeholder-zinc-500 outline-none"
       />
       <input
         type="text"
@@ -980,7 +980,7 @@ function EditScriptView({
           setApplied(false)
           setUndo(null)
         }}
-        className="mb-3 rounded-xl border border-amber-500/30 bg-zinc-900 px-4 py-3 text-lg font-semibold text-amber-100 placeholder-amber-500/50 outline-none"
+        className="mb-3 rounded-xl border border-amber-500/30 atmosphere-surface px-4 py-3 text-lg font-semibold text-amber-100 placeholder-amber-500/50 outline-none"
       />
       <textarea
         placeholder="Paste the rest of your script here..."
@@ -992,7 +992,7 @@ function EditScriptView({
           setApplied(false)
           setUndo(null)
         }}
-        className="min-h-28 flex-1 resize-none rounded-xl bg-zinc-900 p-4 text-base leading-relaxed placeholder-zinc-500 outline-none"
+        className="min-h-28 flex-1 resize-none rounded-xl atmosphere-surface p-4 text-base leading-relaxed placeholder-zinc-500 outline-none"
       />
       {wordCount > 0 && (
         <div className="mt-3">
@@ -1002,7 +1002,7 @@ function EditScriptView({
               ~{readSeconds}s · {zone}
             </span>
           </div>
-          <div className="relative h-2 w-full rounded-full bg-zinc-800">
+          <div className="relative h-2 w-full rounded-full atmosphere-chip">
             <div
               className={`h-full rounded-full transition-all duration-300 ${
                 tooLong ? 'bg-amber-400' : 'bg-gradient-to-r from-sky-400 to-violet-500'
@@ -1010,7 +1010,7 @@ function EditScriptView({
               style={{ width: `${meterPct}%` }}
             />
           </div>
-          <div className="relative mt-1 h-3 text-[10px] text-zinc-500">
+          <div className="relative mt-1 h-3 text-[10px] text-muted">
             {[15, 30, 60].map((t) => (
               <span
                 key={t}
@@ -1025,7 +1025,7 @@ function EditScriptView({
       )}
 
       {score && (
-        <div className="mt-3 max-h-72 space-y-4 overflow-y-auto rounded-2xl bg-zinc-900 p-5">
+        <div className="mt-3 max-h-72 space-y-4 overflow-y-auto rounded-2xl atmosphere-surface p-5">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
               Script score
@@ -1033,7 +1033,7 @@ function EditScriptView({
             <button
               type="button"
               onClick={() => setScore(null)}
-              className="-m-2 p-2 text-xs text-zinc-500 active:scale-95"
+              className="-m-2 p-2 text-xs text-muted active:scale-95"
             >
               Dismiss
             </button>
@@ -1048,7 +1048,7 @@ function EditScriptView({
                 ['Overall', score.scores.overall],
               ] as const
             ).map(([label, value]) => (
-              <div key={label} className="rounded-xl bg-zinc-800 py-2.5">
+              <div key={label} className="rounded-xl atmosphere-chip py-2.5">
                 <p className="text-xl font-bold">{value}</p>
                 <p className="mt-0.5 text-[10px] uppercase tracking-wide text-zinc-400">{label}</p>
               </div>
@@ -1101,7 +1101,7 @@ function EditScriptView({
                     New hook
                   </p>
                   {score.rewrite_hook && (
-                    <p className="mb-2 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-amber-100">
+                    <p className="mb-2 rounded-lg atmosphere-chip px-3 py-2 text-sm font-semibold text-amber-100">
                       {score.rewrite_hook}
                     </p>
                   )}
@@ -1110,18 +1110,18 @@ function EditScriptView({
                       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-sky-300/80">
                         New body
                       </p>
-                      <div className="max-h-48 overflow-y-auto rounded-lg bg-zinc-900 px-3 py-2 text-sm text-zinc-200">
+                      <div className="max-h-48 overflow-y-auto rounded-lg atmosphere-chip px-3 py-2 text-sm text-zinc-200">
                         <p className="whitespace-pre-wrap">{score.rewrite_body}</p>
                       </div>
                     </>
                   )}
                   {/* Sticky within the score panel's scroll area so the
                       decision buttons stay visible on short screens. */}
-                  <div className="sticky bottom-0 mt-3 flex gap-2 rounded-lg bg-zinc-900 py-1">
+                  <div className="sticky bottom-0 mt-3 flex gap-2 rounded-lg atmosphere-chip py-1">
                     <button
                       type="button"
                       onClick={keepMine}
-                      className="flex-1 rounded-full bg-zinc-800 py-2.5 text-sm font-semibold text-white active:scale-95"
+                      className="flex-1 rounded-full atmosphere-chip py-2.5 text-sm font-semibold text-white active:scale-95"
                     >
                       Keep mine
                     </button>
@@ -1158,7 +1158,7 @@ function EditScriptView({
 
       {/* Undo toast: shows for 5s after applying a rewrite. */}
       {undo && (
-        <div className="mt-3 flex items-center justify-between rounded-xl bg-zinc-800 px-4 py-3">
+        <div className="mt-3 flex items-center justify-between rounded-xl atmosphere-chip px-4 py-3">
           <span className="text-sm text-zinc-200">Rewrite applied</span>
           <button
             type="button"
@@ -1175,7 +1175,7 @@ function EditScriptView({
           type="button"
           onClick={scoreScript}
           disabled={!body.trim() || scoring}
-          className="flex-1 rounded-full bg-zinc-800 py-4 font-semibold text-white disabled:opacity-40 active:scale-95"
+          className="flex-1 rounded-full atmosphere-chip py-4 font-semibold text-white disabled:opacity-40 active:scale-95"
         >
           {scoring ? 'Scoring…' : '✨ Score'}
         </button>
@@ -2119,7 +2119,7 @@ function PromptView({
             <div className="flex items-center justify-center gap-3">
               <button
                 onClick={discardRecording}
-                className="rounded-full bg-zinc-800 px-6 py-3 font-semibold text-white active:scale-95"
+                className="rounded-full atmosphere-chip px-6 py-3 font-semibold text-white active:scale-95"
               >
                 Retake
               </button>
@@ -2250,7 +2250,7 @@ function PromptView({
           onClick={() => setShowTune(false)}
         >
           <div
-            className="w-full rounded-t-3xl bg-zinc-900/95 p-6 pb-10 backdrop-blur-xl"
+            className="w-full rounded-t-3xl atmosphere-sheet p-6 pb-10 backdrop-blur-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-zinc-600" />
