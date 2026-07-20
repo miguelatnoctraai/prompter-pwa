@@ -180,9 +180,11 @@ export default async function handler(
     if (err instanceof Anthropic.RateLimitError) {
       res.status(429).json({ error: 'Scoring is busy right now — try again in a minute.' })
     } else if (err instanceof Anthropic.APIError) {
-      res.status(502).json({ error: 'Scoring failed. Try again.' })
+      // TEMP: surface upstream message to debug the 502 in Chunk 1 testing.
+      const detail = (err as Anthropic.APIError & { error?: { message?: string } }).error?.message ?? err.message
+      res.status(502).json({ error: `Scoring failed: ${detail}` })
     } else {
-      res.status(500).json({ error: 'Unexpected error while scoring.' })
+      res.status(500).json({ error: `Unexpected error while scoring: ${(err as Error).message}` })
     }
   }
 }
