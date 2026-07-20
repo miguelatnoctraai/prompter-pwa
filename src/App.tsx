@@ -2014,14 +2014,14 @@ function PromptView({
           {countdown > 0 ? (
             <div
               key={countdown}
-              className="ts-pop flex h-20 w-20 items-center justify-center rounded-full bg-black/50 text-5xl font-bold text-white backdrop-blur-md"
+              className="ts-pop ts-countdown-glow flex h-20 w-20 items-center justify-center rounded-full bg-black/50 text-5xl font-bold text-amber-300 backdrop-blur-md"
             >
               {countdown}
             </div>
           ) : (
             <div
               key="go"
-              className="ts-go text-4xl font-bold text-emerald-300 drop-shadow-lg"
+              className="ts-go-bloom text-4xl font-bold text-amber-300 drop-shadow-lg"
             >
               Go
             </div>
@@ -2225,7 +2225,9 @@ function PromptView({
 
             <button
               onClick={startRecordingWithCountdown}
-              className="flex h-[76px] w-[76px] items-center justify-center rounded-full border-4 border-white/80 shadow-lg shadow-amber-500/40 active:scale-95"
+              className={`flex h-[76px] w-[76px] items-center justify-center rounded-full border-4 border-white/80 shadow-lg shadow-amber-500/40 active:scale-95 ${
+                countdown > 0 || goSignal ? 'ts-breath-intense' : 'ts-breath'
+              }`}
               aria-label="Record"
             >
               <span className="h-14 w-14 rounded-full bg-amber-400" />

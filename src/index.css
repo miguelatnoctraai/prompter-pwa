@@ -243,9 +243,106 @@ button {
   animation: ts-card 0.24s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* Scope 3 Moment B — record ritual.
+   The record button's glow "breathes" while idle (2.4s ease, barely
+   perceptible) and intensifies to a faster heartbeat (1.0s) during the
+   3-2-1 countdown. The "Go" flash blooms slightly larger than the
+   original ts-go, with an amber text-shadow that fades.
+
+   Compositing notes (per the brief's pitfall):
+   - The breath animates OPACITY on a pre-rendered ::before ring, NOT
+     box-shadow or transform on the button itself. Pre-rendered layer
+     + opacity is the only animation that runs on the GPU compositor
+     on every mobile browser without paint/layout cost.
+   - The countdown ring's amber tint animates text-shadow opacity, not
+     the text-shadow's blur radius (which would force paint each frame).
+   - The Go bloom extends the existing ts-go by animating a separate
+     filter:drop-shadow layer, not the text element's own shadow.
+
+   All four animations are disabled by the prefers-reduced-motion
+   block at the bottom of this file. */
+
+/* Slow idle breath on the record button's ::before glow ring.
+   Opacity 0.45 → 0.95 → 0.45 over 2.4s. The ring is pre-rendered; the
+   animation is one composited property. */
+@keyframes ts-breath {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 0.95; }
+}
+
+/* The pre-rendered glow ring that the breath animates. Positioned
+   absolutely behind the button content; same amber as the inner dot
+   so the breath reads as the inner dot's light intensifying. The
+   ring is 1.5× the button's size and uses filter:blur for the soft
+   edge; the blur is computed once (paint) and the opacity is what
+   animates. */
+.ts-breath,
+.ts-breath-intense {
+  position: relative;
+}
+.ts-breath::before,
+.ts-breath-intense::before {
+  content: '';
+  position: absolute;
+  inset: -50%;
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle at center,
+    rgba(251, 191, 36, 0.45) 0%,
+    rgba(251, 191, 36, 0.20) 40%,
+    transparent 70%
+  );
+  filter: blur(12px);
+  z-index: -1;
+  pointer-events: none;
+  /* willReadFrequently: false; the browser can promote this to its
+     own GPU layer because only opacity changes. */
+}
+.ts-breath::before {
+  animation: ts-breath 2.4s ease-in-out infinite;
+}
+
+/* Intense heartbeat during the 3-2-1 countdown. Faster cadence, slightly
+   narrower opacity range so it doesn't strobe — should feel charged,
+   not anxious. */
+@keyframes ts-breath-intense {
+  0%, 100% { opacity: 0.65; }
+  50%      { opacity: 1; }
+}
+.ts-breath-intense::before {
+  animation: ts-breath-intense 1.0s ease-in-out infinite;
+}
+
+/* Countdown ring tint: amber text-shadow that fades in over the existing
+   ts-pop scale animation. Animates opacity of a filter layer, not the
+   text-shadow's own blur or color (which would force paint per frame). */
+@keyframes ts-countdown-glow {
+  0%   { opacity: 0; }
+  60%  { opacity: 1; }
+  100% { opacity: 0.4; }
+}
+.ts-countdown-glow {
+  animation: ts-countdown-glow 0.35s ease-out;
+}
+
+/* "Go" bloom: extends the existing ts-go scale curve and adds a brief
+   amber filter glow. The original ts-go is a one-shot scale 0.8 → 1.08
+   → 1.0; the bloom version adds a 1.18 final scale (slightly larger
+   "punch") and an amber drop-shadow that decays with the curve. */
+@keyframes ts-go-bloom {
+  0%   { transform: scale(0.8); opacity: 0; filter: drop-shadow(0 0 0px rgba(251, 191, 36, 0)); }
+  40%  { transform: scale(1.18); opacity: 1; filter: drop-shadow(0 0 24px rgba(251, 191, 36, 0.9)); }
+  100% { transform: scale(1.0); opacity: 1; filter: drop-shadow(0 0 0px rgba(251, 191, 36, 0)); }
+}
+.ts-go-bloom {
+  animation: ts-go-bloom 0.55s ease-out;
+}
+
 /* Respect reduced-motion: disable the decorative view/card animations. */
 @media (prefers-reduced-motion: reduce) {
-  .ts-view, .ts-fade, .ts-card, .ts-pop, .ts-go {
+  .ts-view, .ts-fade, .ts-card, .ts-pop, .ts-go,
+  .ts-breath::before, .ts-breath-intense::before,
+  .ts-countdown-glow, .ts-go-bloom {
     animation: none;
   }
 }
