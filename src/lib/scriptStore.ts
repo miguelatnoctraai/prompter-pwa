@@ -14,6 +14,9 @@ export interface Script {
 }
 
 const STORAGE_KEY = 'prompter.scripts.v2'
+// Pre-hook-feature storage key. Migrated into v2 (hook: '') on first load so
+// existing users' scripts don't vanish. v1 is left in place as a backup.
+const LEGACY_STORAGE_KEY = 'prompter.scripts.v1'
 // Ids deleted locally but possibly still in the cloud; applied on next full sync
 // so a deletion made offline doesn't get resurrected by the remote copy.
 const TOMBSTONE_KEY = 'prompter.deleted.v1'
@@ -70,7 +73,23 @@ export function formatRelativeTime(ts: number): string {
 
 export function loadScripts(): Script[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    let raw = localStorage.getItem(STORAGE_KEY)
+    // One-time migration: users from before the hook feature have their
+    // scripts under the v1 key, which the v2 switch left stranded. Only runs
+    // when v2 has never been written (so an intentional delete-all sticks).
+    if (raw === null) {
+      const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
+      if (legacy) {
+        try {
+          const old = JSON.parse(legacy) as (Omit<Script, 'hook'> & { hook?: string })[]
+          const upgraded = old.map((s) => ({ ...s, hook: s.hook ?? '' }))
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(upgraded))
+          raw = JSON.stringify(upgraded)
+        } catch {
+          // corrupt legacy data — ignore it
+        }
+      }
+    }
     const scripts = raw ? (JSON.parse(raw) as Script[]) : []
     // The cloud id column is uuid-typed; heal any script whose id isn't one
     // (e.g. seeded test data) so sync doesn't reject the whole batch.

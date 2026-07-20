@@ -90,7 +90,11 @@ export default function App() {
     if (!session) return
     fullSync(loadScripts())
       .then(setScripts)
-      .catch(() => {}) // offline — write-through and manual sync will catch up
+      .catch((err) => {
+        // Offline is fine (write-through catches up), but log it — a schema
+        // mismatch here once failed every sync invisibly.
+        console.warn('Sign-in sync failed:', err instanceof Error ? err.message : err)
+      })
   }, [session])
 
   function createScript() {
