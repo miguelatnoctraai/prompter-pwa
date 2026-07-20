@@ -49,9 +49,7 @@ const RESULT_SCHEMA = {
     },
     fixes: {
       type: 'array',
-      description: '2-4 concrete, specific improvements, most impactful first. Each must reference the actual frame or script — never generic advice. Keep each fix under 18 words.',
-      minItems: 2,
-      maxItems: 4,
+      description: '2-4 concrete, specific improvements, most impactful first. Each must reference the actual frame or script — never generic advice. Keep each fix under 18 words. Exactly 2-4 items.',
       items: { type: 'string' },
     },
     hook_rewrite: {
