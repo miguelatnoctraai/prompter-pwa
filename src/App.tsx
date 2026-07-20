@@ -338,8 +338,8 @@ function ScriptListView({
   const [showBetaBlurDialog, setShowBetaBlurDialog] = useState(false)
 
   return (
-    <div className="ts-view atmosphere-page flex h-full flex-col p-4 pt-12">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="ts-view atmosphere-page flex h-full flex-col p-4 pt-16">
+      <div className="mb-6 flex items-center justify-between">
         <h1
           className="font-display text-2xl font-extrabold bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent"
           aria-label="TalkShot"
