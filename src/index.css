@@ -1,5 +1,26 @@
 @import 'tailwindcss';
 
+/* Scope 2: Display typeface — Bricolage Grotesque.
+   Self-hosted in /public/fonts/. font-display: swap shows the system
+   fallback within ~100ms on slow connections (no invisible-text period).
+   Variable axes were pinned to weight 700 (Bold) and 800 (ExtraBold);
+   we ship only the two weights actually used. Per-file size 43-44KB,
+   under the 50KB cap. */
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  src: url('/fonts/BricolageGrotesque-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  src: url('/fonts/BricolageGrotesque-ExtraBold.woff2') format('woff2');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   color-scheme: dark;
 
@@ -152,6 +173,16 @@ button {
   background-color: var(--btn-primary-bg);
   color: var(--btn-primary-text);
   font-weight: 600;
+}
+
+/* Display typeface utility. Apply to: wordmark, view titles, empty-state
+   pitch, section headers. Body, inputs, teleprompter text stay on the
+   system stack. */
+.font-display {
+  font-family: 'Bricolage Grotesque', ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-feature-settings: 'ss01' on, 'kern' on;
+  letter-spacing: -0.01em;
 }
 
 /* Hide scrollbar for teleprompter text area */

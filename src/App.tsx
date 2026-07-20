@@ -340,7 +340,12 @@ function ScriptListView({
   return (
     <div className="ts-view atmosphere-page flex h-full flex-col p-4 pt-12">
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">TalkShot</h1>
+        <h1
+          className="font-display text-2xl font-extrabold bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent"
+          aria-label="TalkShot"
+        >
+          TalkShot
+        </h1>
         <div className="flex items-center gap-2">
         <button
           type="button"
@@ -376,7 +381,7 @@ function ScriptListView({
       {showSettings && (
         <div className="mb-4 rounded-2xl atmosphere-surface p-4">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Default display</h2>
+            <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-zinc-400">Default display</h2>
             <button
               type="button"
               onClick={onAccount}
@@ -479,7 +484,7 @@ function ScriptListView({
           <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 text-4xl shadow-lg shadow-amber-500/30">
             🎬
           </div>
-          <p className="max-w-xs text-lg text-zinc-300">
+          <p className="max-w-xs font-display text-lg text-zinc-300">
             Write what you want to say. TalkShot scrolls it at eye level while you film.
           </p>
           <button
@@ -658,7 +663,7 @@ function AccountView({
   return (
     <div className="ts-view atmosphere-page flex h-full flex-col p-4 pt-12">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-bold">Account</h1>
+        <h1 className="font-display text-xl font-bold">Account</h1>
         <button type="button" onClick={onBack} className="-m-2 p-2 text-zinc-400 active:scale-95">
           Back
         </button>
@@ -955,7 +960,7 @@ function EditScriptView({
   return (
     <div className="ts-view atmosphere-page flex h-full flex-col p-4 pt-12">
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold">{isNew ? 'New script' : 'Edit script'}</h1>
+        <h1 className="font-display text-xl font-bold">{isNew ? 'New script' : 'Edit script'}</h1>
         <button type="button" onClick={onCancel} className="-m-2 p-2 text-zinc-400 active:scale-95">
           Cancel
         </button>
@@ -1027,7 +1032,7 @@ function EditScriptView({
       {score && (
         <div className="mt-3 max-h-72 space-y-4 overflow-y-auto rounded-2xl atmosphere-surface p-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
+            <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-zinc-400">
               Script score
             </h2>
             <button
