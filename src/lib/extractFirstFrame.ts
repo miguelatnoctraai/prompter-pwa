@@ -1,25 +1,18 @@
-// Extract one or more still frames from a recorded video blob, downscaled
-// to 768px on the longest edge and encoded as JPEG at quality 0.7.
+// Extract multiple still frames from a recorded video Blob, downscaled
+// for upload. Used by the post-record virality-score flow.
 //
-// Used by the post-record virality-score flow: the user has a recorded
-// video Blob in memory, we need base64 JPEGs to send to /api/score-video.
-//
-// Frame timing: TalkShot records after a 3-2-1 countdown, so the encoder's
-// first I-frame is BEFORE the user's actual opening frame. We extract
-// multiple candidate timestamps and let the user pick which represents
-// their "first frame" best.
-//
-// Why multiple: at t=4.0 the creator is often just past the countdown
-// (mid-intro, eyes on the teleprompter, expression flat). At t=6.0 they're
-// usually in motion, eye contact settled, expression live. Both are
-// reasonable "first frame" candidates — the user knows which one they
-// want scored.
-export interface ExtractFirstFrameOptions {
-  /** Override the frame timestamps in seconds. Default [4.0, 6.0]. */
+// Why multiple frames (not one): a single still image cannot show
+// expression, energy, or pacing — those are temporal. By sampling 4
+// frames at 1s intervals starting at t=3, we give the model a "flipbook"
+// of the opening — enough temporal data to judge expression, eye
+// contact, and energy without the cost of sending a full video.
+
+export interface ExtractFramesOptions {
+  /** Timestamps in seconds. Default [3.0, 4.0, 5.0, 6.0]. */
   timesSeconds?: number[]
-  /** Max edge in pixels (downscale to fit). Default 768. */
+  /** Max edge in pixels. Default 512 (4 images, total ~1MB). */
   maxEdge?: number
-  /** JPEG quality 0–1. Default 0.7. */
+  /** JPEG quality 0-1. Default 0.7. */
   quality?: number
 }
 
@@ -29,26 +22,23 @@ export interface ExtractedFrame {
   width: number
   height: number
   approxBytes: number
-  /** The timestamp (in seconds) actually used for extraction. */
   timeSeconds: number
 }
 
 /**
- * Extract one or more candidate frames from a video Blob. Returns an
- * array of ExtractedFrame in the order requested; missing/corrupt
- * timestamps are dropped from the result (not failed). Returns an empty
- * array if no frames could be extracted at all.
+ * Extract multiple candidate frames from a video Blob. Returns an array
+ * of ExtractedFrame in the order requested; missing/corrupt timestamps
+ * are dropped from the result (not failed). Returns an empty array if
+ * no frames could be extracted at all.
  */
 export async function extractFirstFrame(
   blob: Blob,
-  options: ExtractFirstFrameOptions = {},
+  options: ExtractFramesOptions = {},
 ): Promise<ExtractedFrame[]> {
-  const timesSeconds = options.timesSeconds ?? [4.0, 6.0]
-  const maxEdge = options.maxEdge ?? 768
+  const timesSeconds = options.timesSeconds ?? [3.0, 4.0, 5.0, 6.0]
+  const maxEdge = options.maxEdge ?? 512
   const quality = options.quality ?? 0.7
 
-  // Use a transient <video> + <canvas> pair. We never attach these to the
-  // DOM, so there's no layout cost and no risk of them flashing on screen.
   const video = document.createElement('video')
   video.muted = true
   video.playsInline = true
@@ -71,8 +61,6 @@ export async function extractFirstFrame(
     if (!ctx) return []
 
     for (const requestedTime of timesSeconds) {
-      // Cap by video duration. If a take is 5s long, t=6.0 will fail to
-      // seek; fall back to the last 0.2s so we still get a frame.
       let seekTarget = requestedTime
       if (video.duration > 0 && seekTarget >= video.duration) {
         seekTarget = Math.max(0, video.duration - 0.2)

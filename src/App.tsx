@@ -1336,12 +1336,14 @@ function PromptView({
   // Lets the creator cancel during the 3-2-1 countdown by tapping anywhere.
   const countdownCancelledRef = useRef(false)
 
-  // Post-record virality scoring: extracts two candidate still frames
-  // (t=4s and t=6s by default — past the 3-2-1 countdown), lets the user
-  // pick which one represents their "first frame" best, and asks
-  // /api/score-video for a fix-list on the selected frame.
-  const [videoFrames, setVideoFrames] = useState<ExtractedFrame[]>([])
-  const [selectedFrameIdx, setSelectedFrameIdx] = useState(0)
+  // Post-record virality scoring: extracts one still frame at t=4s
+  // (past the 3-2-1 countdown) and asks /api/score-video for a fix-list.
+  // We intentionally do NOT extract multiple frames or show a picker —
+  // the user just records, taps "Get feedback," and gets the result. The
+  // single still is the simplest UX, even if a multi-frame "flipbook"
+  // would give the model more temporal data to judge expression. UX over
+  // coverage.
+  const [videoFrame, setVideoFrame] = useState<ExtractedFrame | null>(null)
   const [videoScore, setVideoScore] = useState<{
     hook_strength: 'weak' | 'ok' | 'strong'
     payoff: 'weak' | 'ok' | 'strong'
@@ -1858,23 +1860,20 @@ function PromptView({
     reviewVideoRef.current?.pause()
     if (recordedUrl) URL.revokeObjectURL(recordedUrl)
     setRecordedUrl(null)
-    setVideoFrames([])
-    setSelectedFrameIdx(0)
+    setVideoFrame(null)
     setVideoScore(null)
     setVideoScoreError(null)
     setVideoScoreLoading(false)
     resetScroll()
   }
 
-  // Extract two candidate stills from the recorded video when the review
-  // screen mounts. The user picks which one represents their "first frame"
-  // best before scoring. Failure (corrupt video, missing codec) leaves
-  // videoFrames empty and the score UI will surface an error. Also clears
-  // the previous take's score so a stale result doesn't carry over.
+  // Extract a still from the recorded video the moment the review screen
+  // mounts (or re-mounts after a re-record). Runs once per take. Failure
+  // (corrupt video, missing codec) leaves videoFrame null and the score UI
+  // will surface an error. Also clears the previous take's score so a stale
+  // result doesn't carry over to the new recording.
   useEffect(() => {
     if (!recordedUrl) return
-    setVideoFrames([])
-    setSelectedFrameIdx(0)
     setVideoScore(null)
     setVideoScoreError(null)
     let cancelled = false
@@ -1882,9 +1881,9 @@ function PromptView({
       try {
         const resp = await fetch(recordedUrl)
         const blob = await resp.blob()
-        const frames = await extractFirstFrame(blob)
+        const frames = await extractFirstFrame(blob, { timesSeconds: [4.0] })
         if (cancelled) return
-        setVideoFrames(frames)
+        setVideoFrame(frames[0] ?? null)
         if (frames.length === 0) {
           setVideoScoreError("Couldn't read a frame from your video. Try re-recording.")
         }
@@ -1899,11 +1898,9 @@ function PromptView({
   }, [recordedUrl])
 
   // Call the virality-score endpoint. Triggered manually from the UI so we
-  // don't burn API calls on takes the user is about to discard. Sends the
-  // currently-selected candidate frame.
+  // don't burn API calls on takes the user is about to discard.
   async function scoreVideo() {
-    const selectedFrame = videoFrames[selectedFrameIdx]
-    if (!selectedFrame) {
+    if (!videoFrame) {
       setVideoScoreError("Couldn't read a frame from your video. Try re-recording.")
       return
     }
@@ -1919,8 +1916,8 @@ function PromptView({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          firstFrameBase64: selectedFrame.base64,
-          firstFrameMediaType: selectedFrame.mediaType,
+          firstFrameBase64: videoFrame.base64,
+          firstFrameMediaType: videoFrame.mediaType,
           hook: script.hook,
           body: script.body,
         }),
@@ -2205,52 +2202,18 @@ function PromptView({
               Save it, or take it again.
             </p>
 
-            {/* Post-record virality score. We extract two candidate stills
-                (t=4s and t=6s) and let the user pick which one represents
-                their "first frame" before scoring. The thumbnails are small
-                previews rendered from the candidate JPEGs. */}
-            {!videoScore && !videoScoreLoading && !videoScoreError && videoFrames.length > 0 && (
-              <div className="mb-3">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-300">
-                  Pick your first frame
-                </p>
-                <div className="flex justify-center gap-2">
-                  {videoFrames.map((frame, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setSelectedFrameIdx(i)}
-                      aria-label={`Use frame at ${frame.timeSeconds.toFixed(1)} seconds`}
-                      aria-pressed={i === selectedFrameIdx}
-                      className={`relative overflow-hidden rounded-lg border-2 transition-all active:scale-95 ${
-                        i === selectedFrameIdx
-                          ? 'border-amber-400 ring-2 ring-amber-400/50'
-                          : 'border-white/20 opacity-60'
-                      }`}
-                    >
-                      <img
-                        src={`data:${frame.mediaType};base64,${frame.base64}`}
-                        alt={`Frame at ${frame.timeSeconds.toFixed(1)} seconds`}
-                        className="block h-20 w-14 object-cover"
-                      />
-                      <span className="absolute bottom-0 left-0 right-0 bg-black/70 py-0.5 text-[10px] font-semibold text-white">
-                        {frame.timeSeconds.toFixed(1)}s
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Post-record virality score. We extract a single still at t=4s
+                (past the countdown) and send it to /api/score-video. The user
+                taps "Get feedback" — no picker, no decisions. Result card
+                shows 2-4 specific fixes plus a one-sentence hook rewrite. */}
             {!videoScore && !videoScoreLoading && !videoScoreError && (
               <button
                 type="button"
                 onClick={() => void scoreVideo()}
-                disabled={videoFrames.length === 0}
+                disabled={!videoFrame}
                 className="mb-4 w-full rounded-full bg-white/15 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/25 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {videoFrames.length > 0
-                  ? 'Get feedback on this take'
-                  : 'Preparing feedback…'}
+                {videoFrame ? 'Get feedback on this take' : 'Preparing feedback…'}
               </button>
             )}
             {videoScoreLoading && (

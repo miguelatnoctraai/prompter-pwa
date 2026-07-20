@@ -1,14 +1,16 @@
 import Anthropic from '@anthropic-ai/sdk'
 
 // Vercel serverless function: POST /api/score-video
-//   { firstFrameBase64: string, firstFrameMediaType: 'image/jpeg' | 'image/png',
+//   { firstFrameBase64: string, firstFrameMediaType: 'image/jpeg',
 //     script: string, hook?: string, body?: string }
 // Requires ANTHROPIC_API_KEY in the environment (Vercel project settings).
 //
 // Returns a fix-list and one-sentence hook rewrite for a recorded short-form
-// video. Combines visual analysis of the first frame with structural analysis
-// of the script. Output is action-oriented (what to improve), not evaluative
-// (a numeric score).
+// video. The client sends 4 frames sampled at t=3, 4, 5, 6 seconds — a
+// flipbook of the opening that gives the model enough temporal data to
+// judge expression, eye contact, and energy (which a single still cannot).
+// Output is action-oriented (what to improve), not evaluative (a numeric
+// score).
 
 const MAX_SCRIPT_CHARS = 8000
 const MAX_IMAGE_BYTES = 1_500_000 // ~1.2 MB headroom under Vercel's 4.5MB body limit
