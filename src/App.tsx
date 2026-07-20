@@ -14,6 +14,7 @@ import {
   seedDemoScriptIfFirstRun,
   type Script,
 } from './lib/scriptStore'
+import { extractFirstFrame, type ExtractedFrame } from './lib/extractFirstFrame'
 
 interface Settings {
   fontSize: number
@@ -1339,6 +1340,20 @@ function PromptView({
   // Lets the creator cancel during the 3-2-1 countdown by tapping anywhere.
   const countdownCancelledRef = useRef(false)
 
+  // Post-record virality scoring: extracts a still frame from the recording
+  // and asks /api/score-video for a fix-list. Frame is extracted once when
+  // the review screen mounts; user can re-score explicitly. UI is wired
+  // below in the review-screen JSX.
+  const [videoFrame, setVideoFrame] = useState<ExtractedFrame | null>(null)
+  const [videoScore, setVideoScore] = useState<{
+    hook_strength: 'weak' | 'ok' | 'strong'
+    payoff: 'weak' | 'ok' | 'strong'
+    fixes: string[]
+    hook_rewrite: string
+  } | null>(null)
+  const [videoScoreLoading, setVideoScoreLoading] = useState(false)
+  const [videoScoreError, setVideoScoreError] = useState<string | null>(null)
+
   // AI cue cards (from the scoring endpoint) are preferred when present — they
   // break at natural spoken beats instead of the client-side regex. Falls back
   // to the regex splitter for unscored scripts. The hook is always card 0.
@@ -1866,7 +1881,91 @@ function PromptView({
     reviewVideoRef.current?.pause()
     if (recordedUrl) URL.revokeObjectURL(recordedUrl)
     setRecordedUrl(null)
+    setVideoFrame(null)
+    setVideoScore(null)
+    setVideoScoreError(null)
+    setVideoScoreLoading(false)
     resetScroll()
+  }
+
+  // Extract a still from the recorded video the moment the review screen
+  // mounts (or re-mounts after a re-record). Runs once per take. Failure
+  // (corrupt video, missing codec) leaves videoFrame null and the score UI
+  // will surface an error. Also clears the previous take's score so a stale
+  // result doesn't carry over to the new recording.
+  useEffect(() => {
+    if (!recordedUrl) return
+    setVideoScore(null)
+    setVideoScoreError(null)
+    let cancelled = false
+    void (async () => {
+      try {
+        const resp = await fetch(recordedUrl)
+        const blob = await resp.blob()
+        const frame = await extractFirstFrame(blob)
+        if (cancelled) return
+        setVideoFrame(frame)
+        if (!frame) {
+          setVideoScoreError("Couldn't read a frame from your video. Try re-recording.")
+        }
+      } catch {
+        if (cancelled) return
+        setVideoScoreError("Couldn't load your video for analysis.")
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [recordedUrl])
+
+  // Call the virality-score endpoint. Triggered manually from the UI so we
+  // don't burn API calls on takes the user is about to discard.
+  async function scoreVideo() {
+    if (!videoFrame) {
+      setVideoScoreError("Couldn't read a frame from your video. Try re-recording.")
+      return
+    }
+    if (!script.hook.trim() && !script.body.trim()) {
+      setVideoScoreError('No script found for this recording. Add a script and re-record.')
+      return
+    }
+    setVideoScoreLoading(true)
+    setVideoScoreError(null)
+    setVideoScore(null)
+    try {
+      const resp = await fetch('/api/score-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstFrameBase64: videoFrame.base64,
+          firstFrameMediaType: videoFrame.mediaType,
+          hook: script.hook,
+          body: script.body,
+        }),
+      })
+      if (!resp.ok) {
+        let message = 'Scoring failed. Try again.'
+        try {
+          const data = (await resp.json()) as { error?: string }
+          if (data.error) message = data.error
+        } catch {
+          if (resp.status === 404) message = 'Scoring is only available on the deployed app.'
+        }
+        setVideoScoreError(message)
+        return
+      }
+      const result = (await resp.json()) as {
+        hook_strength: 'weak' | 'ok' | 'strong'
+        payoff: 'weak' | 'ok' | 'strong'
+        fixes: string[]
+        hook_rewrite: string
+      }
+      setVideoScore(result)
+    } catch {
+      setVideoScoreError('Could not reach the scoring service. Are you online?')
+    } finally {
+      setVideoScoreLoading(false)
+    }
   }
 
   function formatTime(totalSeconds: number) {
@@ -2123,6 +2222,72 @@ function PromptView({
             <p className="mb-4 text-sm text-zinc-300 drop-shadow">
               Save it, or take it again.
             </p>
+
+            {/* Post-record virality score (Chunks 2-5). The frame is extracted
+                silently when the screen mounts; the user taps "Get feedback"
+                to call the API. While loading, the button shows a spinner. The
+                result card lists 2-4 specific fixes plus a one-sentence hook
+                rewrite suggestion. */}
+            {!videoScore && !videoScoreLoading && !videoScoreError && (
+              <button
+                type="button"
+                onClick={() => void scoreVideo()}
+                disabled={!videoFrame}
+                className="mb-4 w-full rounded-full bg-white/15 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/25 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {videoFrame ? 'Get feedback on this take' : 'Preparing feedback…'}
+              </button>
+            )}
+            {videoScoreLoading && (
+              <div className="mb-4 flex items-center justify-center gap-2 text-sm text-zinc-300">
+                <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-amber-400" />
+                Looking at your first frame and script…
+              </div>
+            )}
+            {videoScoreError && (
+              <div className="mb-4 rounded-lg bg-red-500/20 px-3 py-2 text-left text-sm text-red-100">
+                {videoScoreError}
+                <button
+                  type="button"
+                  onClick={() => void scoreVideo()}
+                  className="mt-1 block text-xs font-semibold text-red-200 underline"
+                >
+                  Try again
+                </button>
+              </div>
+            )}
+            {videoScore && (
+              <div className="mb-4 rounded-2xl border border-white/10 bg-black/55 p-4 text-left backdrop-blur-sm">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-300">
+                  How to make it stronger
+                </p>
+                <ul className="mb-3 space-y-1.5 text-sm text-white">
+                  {videoScore.fixes.map((fix, i) => (
+                    <li key={i} className="flex gap-2">
+                      <span className="text-amber-400">•</span>
+                      <span>{fix}</span>
+                    </li>
+                  ))}
+                </ul>
+                {videoScore.hook_rewrite &&
+                  videoScore.hook_rewrite.trim() !== script.hook.trim() && (
+                    <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-left">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                        Try this opening
+                      </p>
+                      <p className="text-sm text-amber-50">{videoScore.hook_rewrite}</p>
+                    </div>
+                  )}
+                <button
+                  type="button"
+                  onClick={() => void scoreVideo()}
+                  className="mt-3 text-xs font-semibold text-zinc-300 underline"
+                >
+                  Re-score
+                </button>
+              </div>
+            )}
+
             <div className="flex items-center justify-center gap-3">
               <button
                 onClick={discardRecording}
