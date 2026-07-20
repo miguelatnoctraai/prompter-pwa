@@ -395,33 +395,37 @@ function ScriptListView({
               onChange={(v) => onUpdateSettings({ speed: v })}
             />
           </div>
-          <label className="mt-3 flex items-center gap-2 text-sm">
+          <label className="mt-3 flex items-center gap-2.5 text-sm">
             <input
               type="checkbox"
+              className="h-5 w-5"
               checked={settings.mirror}
               onChange={(e) => onUpdateSettings({ mirror: e.target.checked })}
             />
             Mirror text by default
           </label>
-          <label className="mt-2 flex items-center gap-2 text-sm">
+          <label className="mt-2 flex items-center gap-2.5 text-sm">
             <input
               type="checkbox"
+              className="h-5 w-5"
               checked={settings.focusMode}
               onChange={(e) => onUpdateSettings({ focusMode: e.target.checked })}
             />
-            Focus mode (one cue card at a time)
+            Cards mode (one cue card at a time)
           </label>
-          <label className="mt-2 flex items-center gap-2 text-sm">
+          <label className="mt-2 flex items-center gap-2.5 text-sm">
             <input
               type="checkbox"
+              className="h-5 w-5"
               checked={settings.autoCueCards}
               onChange={(e) => onUpdateSettings({ autoCueCards: e.target.checked })}
             />
-            Auto-cue cards in Focus mode
+            Auto-split cards at sentence breaks
           </label>
-          <label className="mt-2 flex items-center gap-2 text-sm">
+          <label className="mt-2 flex items-center gap-2.5 text-sm">
             <input
               type="checkbox"
+              className="h-5 w-5"
               checked={settings.backgroundBlur}
               onChange={(e) => {
                 if (e.target.checked) {
@@ -516,14 +520,14 @@ function ScriptListView({
                 <button
                   type="button"
                   onClick={() => onEdit(script)}
-                  className="ml-auto rounded-full bg-zinc-800 px-4 py-2 font-medium text-zinc-200 active:scale-95"
+                  className="ml-auto rounded-full bg-zinc-800 px-4 py-2.5 font-medium text-zinc-200 active:scale-95"
                 >
                   Edit
                 </button>
                 <button
                   type="button"
                   onClick={() => onDelete(script.id)}
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-800 text-zinc-400 active:scale-95"
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-800 text-zinc-400 active:scale-95"
                   aria-label="Delete"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -651,7 +655,7 @@ function AccountView({
     <div className="ts-view flex h-full flex-col bg-zinc-950 p-4 pt-12">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-bold">Account</h1>
-        <button type="button" onClick={onBack} className="text-zinc-400 active:scale-95">
+        <button type="button" onClick={onBack} className="-m-2 p-2 text-zinc-400 active:scale-95">
           Back
         </button>
       </div>
@@ -876,9 +880,18 @@ function EditScriptView({
     }
   }
 
+  const previewRef = useRef<HTMLDivElement>(null)
+
   function previewRewrite() {
     if (!score) return
     setPreviewing(true)
+    // The preview renders at the end of the score panel's scroll area — on
+    // short phones its Use/Keep buttons land below the panel's fold. Scroll
+    // the panel to its end so the decision is visible immediately.
+    window.setTimeout(() => {
+      const panel = previewRef.current?.closest('.overflow-y-auto')
+      if (panel) panel.scrollTop = panel.scrollHeight
+    }, 60)
   }
 
   function keepMine() {
@@ -939,7 +952,7 @@ function EditScriptView({
     <div className="ts-view flex h-full flex-col bg-zinc-950 p-4 pt-12">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-bold">{isNew ? 'New script' : 'Edit script'}</h1>
-        <button type="button" onClick={onCancel} className="text-zinc-400 active:scale-95">
+        <button type="button" onClick={onCancel} className="-m-2 p-2 text-zinc-400 active:scale-95">
           Cancel
         </button>
       </div>
@@ -975,7 +988,7 @@ function EditScriptView({
           setApplied(false)
           setUndo(null)
         }}
-        className="flex-1 resize-none rounded-xl bg-zinc-900 p-4 text-base leading-relaxed placeholder-zinc-500 outline-none"
+        className="min-h-28 flex-1 resize-none rounded-xl bg-zinc-900 p-4 text-base leading-relaxed placeholder-zinc-500 outline-none"
       />
       {wordCount > 0 && (
         <div className="mt-3">
@@ -1016,7 +1029,7 @@ function EditScriptView({
             <button
               type="button"
               onClick={() => setScore(null)}
-              className="text-xs text-zinc-500 active:scale-95"
+              className="-m-2 p-2 text-xs text-zinc-500 active:scale-95"
             >
               Dismiss
             </button>
@@ -1079,7 +1092,7 @@ function EditScriptView({
               </div>
 
               {previewing ? (
-                <div className="mb-2 rounded-xl border border-sky-500/30 bg-sky-500/5 p-3">
+                <div ref={previewRef} className="mb-2 rounded-xl border border-sky-500/30 bg-sky-500/5 p-3">
                   <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-sky-300/80">
                     New hook
                   </p>
@@ -1098,18 +1111,20 @@ function EditScriptView({
                       </div>
                     </>
                   )}
-                  <div className="mt-3 flex gap-2">
+                  {/* Sticky within the score panel's scroll area so the
+                      decision buttons stay visible on short screens. */}
+                  <div className="sticky bottom-0 mt-3 flex gap-2 rounded-lg bg-zinc-900 py-1">
                     <button
                       type="button"
                       onClick={keepMine}
-                      className="flex-1 rounded-full bg-zinc-800 py-2 text-sm font-semibold text-white active:scale-95"
+                      className="flex-1 rounded-full bg-zinc-800 py-2.5 text-sm font-semibold text-white active:scale-95"
                     >
                       Keep mine
                     </button>
                     <button
                       type="button"
                       onClick={useRewrite}
-                      className="flex-1 rounded-full bg-sky-500 py-2 text-sm font-semibold text-white active:scale-95"
+                      className="flex-1 rounded-full bg-sky-500 py-2.5 text-sm font-semibold text-white active:scale-95"
                     >
                       Use rewrite
                     </button>
@@ -1660,6 +1675,11 @@ function PromptView({
   }
 
   async function startRecordingWithCountdown() {
+    // Fail fast instead of running a 3-2-1 against a dead camera.
+    if (!streamRef.current) {
+      setError('Camera is not ready.')
+      return
+    }
     resetScroll()
     setRecordedUrl(null)
     resetRecordingState()
@@ -1967,7 +1987,7 @@ function PromptView({
         </div>
       )}
       {error && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 p-8 text-center text-white">
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/80 p-8 text-center text-white">
           <p>{error}</p>
           <button onClick={() => window.location.reload()} className="mt-4 rounded-full bg-white px-6 py-2 text-black">
             Reload
@@ -2147,7 +2167,7 @@ function PromptView({
           <div className="mb-5 flex min-h-[28px] items-center justify-between gap-2">
             <button
               onClick={resetScroll}
-              className="rounded-full bg-white/10 px-3 py-2 text-xs font-medium text-white/90 backdrop-blur-sm active:scale-95"
+              className="rounded-full bg-white/10 px-3.5 py-3 text-xs font-medium text-white/90 backdrop-blur-sm active:scale-95"
               aria-label="Reset to start"
             >
               ↺ Reset
@@ -2159,7 +2179,7 @@ function PromptView({
               <div className="flex gap-0.5 rounded-full bg-white/10 p-0.5 backdrop-blur-sm">
                 <button
                   onClick={() => onUpdateSettings({ focusMode: false })}
-                  className={`rounded-full px-3 py-1.5 text-xs active:scale-95 ${
+                  className={`rounded-full px-4 py-2.5 text-xs active:scale-95 ${
                     !settings.focusMode ? 'bg-white font-semibold text-black' : 'text-white/70'
                   }`}
                 >
@@ -2167,7 +2187,7 @@ function PromptView({
                 </button>
                 <button
                   onClick={() => onUpdateSettings({ focusMode: true })}
-                  className={`rounded-full px-3 py-1.5 text-xs active:scale-95 ${
+                  className={`rounded-full px-4 py-2.5 text-xs active:scale-95 ${
                     settings.focusMode ? 'bg-white font-semibold text-black' : 'text-white/70'
                   }`}
                 >
@@ -2177,7 +2197,7 @@ function PromptView({
             </div>
             <button
               onClick={() => setShowTune(true)}
-              className="rounded-full bg-white/10 px-3 py-2 text-xs font-medium text-white/90 backdrop-blur-sm active:scale-95"
+              className="rounded-full bg-white/10 px-3.5 py-3 text-xs font-medium text-white/90 backdrop-blur-sm active:scale-95"
               aria-label="Adjust text and display"
             >
               Aa Adjust
