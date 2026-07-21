@@ -144,7 +144,11 @@ HOOK REWRITE:
 - Return a single rewritten opening line in the creator's voice.
 - Under 30 words.
 - If the existing opening line is already strong, return it unchanged.
-- Do not invent facts or numbers not present in the original script.`
+- Do not invent facts or numbers not present in the original script.
+- Preserve the creator's core claim, intended target, and level of conviction. Make it sharper; never make it milder, more neutral, or more broadly palatable.
+- Match their actual vocabulary, rhythm, directness, humor, and profanity. If the original is brash, provocative, irreverent, or confrontational, keep that energy instead of translating it into polished or PC language.
+- Keep meaningful profanity when the creator used it. Do not substitute euphemisms or generic creator-speak.
+- Do not invent facts, numbers, targets, or accusations. Stay within applicable safety requirements, but otherwise optimize for voice fidelity and scroll-stopping force.`
 
 export default async function handler(
   req: { method?: string; body?: { firstFrameBase64?: unknown; firstFrameMediaType?: unknown; script?: unknown; hook?: unknown; body?: unknown } },
