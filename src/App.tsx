@@ -1378,10 +1378,13 @@ function PromptView({
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+        // TalkShot records a take; it is not a call. Voice-call processing can
+        // combine badly with Bluetooth mics, whose signal is already processed
+        // by iOS/the headset, producing a hollow or underwater result.
         audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
         },
       })
       streamRef.current = stream
@@ -1405,6 +1408,14 @@ function PromptView({
     } finally {
       setLoading(false)
     }
+  }
+
+  function reconnectMicrophone() {
+    // iOS Safari can retain the input route it chose when getUserMedia first
+    // ran. Recreating the complete stream is the reliable way to pick up a
+    // Bluetooth mic that was connected or switched after TalkShot opened.
+    if (isRecording || countdown > 0 || goSignal) return
+    void startCamera()
   }
 
   async function initSegmenter() {
@@ -2120,6 +2131,14 @@ function PromptView({
             </button>
             <span className="text-sm font-medium text-white/90">{script.title}</span>
             <div className="flex items-center gap-2">
+              <button
+                onClick={reconnectMicrophone}
+                disabled={loading}
+                className="rounded-full bg-white/20 px-3 py-2 text-xs text-white backdrop-blur-sm active:scale-95 disabled:opacity-50"
+                aria-label="Reconnect microphone after connecting a Bluetooth microphone"
+              >
+                {loading ? 'Connectingâ€¦' : 'Mic'}
+              </button>
               <button
                 onClick={() => setShowScript((s) => !s)}
                 className="rounded-full bg-white/20 px-4 py-2 text-sm text-white backdrop-blur-sm active:scale-95"
